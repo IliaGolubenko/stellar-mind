@@ -1,83 +1,80 @@
+import { useEffect, useMemo, useState } from 'react';
+
 import './App.css';
 
+import GalaxyScene from './components/GalaxyScene';
+import PlanetTooltip from './components/PlanetTooltip';
+import type { Exoplanet } from './types/exoplanet';
 import useExoplanets from './hooks/useExoplanets';
 
-const formatNumber = (value: number | null, decimals = 2) => {
-  if (value === null) {
-    return '—';
+const selectRandomPlanets = (planets: Exoplanet[], count = 4) => {
+  if (planets.length <= count) {
+    return planets;
   }
 
-  return value.toFixed(decimals);
+  const prioritized = planets.filter(
+    (planet) => planet.pl_rade !== null && planet.pl_bmasse !== null,
+  );
+  const pool = prioritized.length >= count ? prioritized : planets;
+  const candidates = [...pool];
+
+  for (let i = candidates.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+
+  return candidates.slice(0, count);
 };
 
 function App() {
   const { items, status, error } = useExoplanets();
+  const [selectedPlanet, setSelectedPlanet] = useState<Exoplanet | null>(null);
+  const [hoveredPlanet, setHoveredPlanet] = useState<Exoplanet | null>(null);
+
+  const featuredPlanets = useMemo(() => selectRandomPlanets(items), [items]);
+  const activePlanet = selectedPlanet ?? hoveredPlanet ?? featuredPlanets[0] ?? null;
+
+  useEffect(() => {
+    setSelectedPlanet(null);
+    setHoveredPlanet(null);
+  }, [items]);
 
   return (
-    <main className="app">
-      <header className="app__header">
-        <h1>NASA Exoplanet Archive</h1>
-        <p>Latest confirmed exoplanets with key discovery metrics.</p>
+    <main className="app-shell">
+      <section className="scene-wrapper">
+        <GalaxyScene
+          planets={featuredPlanets}
+          onPlanetSelect={(planet) => setSelectedPlanet(planet)}
+          onPlanetHover={setHoveredPlanet}
+        />
+        {status === 'loading' && (
+          <div className="status status--floating">Summoning the cosmos...</div>
+        )}
+        {status === 'failed' && (
+          <div className="status status--floating status--error" role="alert">
+            Unable to reach the NASA archive: {error}
+          </div>
+        )}
+        {status === 'succeeded' && featuredPlanets.length === 0 && (
+          <div className="status status--floating" role="status">
+            No exoplanets available right now. Try again soon.
+          </div>
+        )}
+      </section>
+
+      <header className="overlay overlay--header">
+        <h1>Stellar Mind Observatory</h1>
+        <p>
+          Spin the galaxy, discover planets inspired by NASA&apos;s Exoplanet Archive, and learn
+          their stories.
+        </p>
       </header>
 
-      {status === 'loading' && <p className="app__message">Loading exoplanet data…</p>}
-      {status === 'failed' && (
-        <p className="app__message app__message--error" role="alert">
-          Unable to load exoplanets: {error}
-        </p>
-      )}
+      <PlanetTooltip planet={activePlanet} visible={Boolean(activePlanet)} />
 
-      {status === 'succeeded' && (
-        <section className="exoplanet-grid" aria-live="polite">
-          {items.map((planet) => (
-            <article className="exoplanet-card" key={planet.pl_name}>
-              <h2>{planet.pl_name}</h2>
-              <dl>
-                <div>
-                  <dt>Host Star</dt>
-                  <dd>{planet.hostname ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>Discovery Method</dt>
-                  <dd>{planet.discoverymethod ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>Discovery Year</dt>
-                  <dd>{planet.disc_year ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>Orbital Period (days)</dt>
-                  <dd>{formatNumber(planet.pl_orbper)}</dd>
-                </div>
-                <div>
-                  <dt>Planet Radius (Earth radii)</dt>
-                  <dd>{formatNumber(planet.pl_rade)}</dd>
-                </div>
-                <div>
-                  <dt>Planet Mass (Earth masses)</dt>
-                  <dd>{formatNumber(planet.pl_bmasse)}</dd>
-                </div>
-                <div>
-                  <dt>Star Spectral Type</dt>
-                  <dd>{planet.st_spectype ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>Star Temperature (K)</dt>
-                  <dd>{formatNumber(planet.st_teff, 0)}</dd>
-                </div>
-                <div>
-                  <dt>Star Radius (Solar radii)</dt>
-                  <dd>{formatNumber(planet.st_rad)}</dd>
-                </div>
-                <div>
-                  <dt>Star Mass (Solar masses)</dt>
-                  <dd>{formatNumber(planet.st_mass)}</dd>
-                </div>
-              </dl>
-            </article>
-          ))}
-        </section>
-      )}
+      <footer className="overlay overlay--footer">
+        <p>Drag or swipe to rotate. Click a planet to pin its details.</p>
+      </footer>
     </main>
   );
 }
