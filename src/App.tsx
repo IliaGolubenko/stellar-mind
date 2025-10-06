@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 
 import './App.css';
 
-import GalaxyScene from './components/GalaxyScene';
 import PlanetTooltip from './components/PlanetTooltip';
 import type { Exoplanet } from './types/exoplanet';
 import useExoplanets from './hooks/useExoplanets';
@@ -42,11 +41,6 @@ function App() {
   return (
     <main className="app-shell">
       <section className="scene-wrapper">
-        <GalaxyScene
-          planets={featuredPlanets}
-          onPlanetSelect={(planet) => setSelectedPlanet(planet)}
-          onPlanetHover={setHoveredPlanet}
-        />
         {status === 'loading' && (
           <div className="status status--floating">Summoning the cosmos...</div>
         )}
