@@ -1,8 +1,8 @@
-import type { Exoplanet } from '../types/exoplanet';
+import type { Exoplanet } from '../types/exoplanet'
 
 interface PlanetTooltipProps {
-  planet: Exoplanet | null;
-  visible: boolean;
+  planet: Exoplanet | null
+  visible: boolean
 }
 
 const renderMetric = (label: string, value: string | number | null) => (
@@ -10,21 +10,21 @@ const renderMetric = (label: string, value: string | number | null) => (
     <span>{label}</span>
     <strong>{value ?? 'N/A'}</strong>
   </li>
-);
+)
 
 const formatNumber = (value: number | null, digits = 2) => {
-  if (value === null || Number.isNaN(value)) return 'N/A';
+  if (value === null || Number.isNaN(value)) return 'N/A'
 
   if (Math.abs(value) >= 1000) {
-    return value.toLocaleString(undefined, { maximumFractionDigits: digits });
+    return value.toLocaleString(undefined, { maximumFractionDigits: digits })
   }
 
-  return value.toFixed(digits);
-};
+  return value.toFixed(digits)
+}
 
 const PlanetTooltip = ({ planet, visible }: PlanetTooltipProps) => {
   if (!visible || !planet) {
-    return null;
+    return null
   }
 
   return (
@@ -64,7 +64,7 @@ const PlanetTooltip = ({ planet, visible }: PlanetTooltipProps) => {
         )}
       </ul>
     </aside>
-  );
-};
+  )
+}
 
-export default PlanetTooltip;
+export default PlanetTooltip

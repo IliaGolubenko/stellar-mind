@@ -3,10 +3,10 @@ const config = {
   arrowParens: 'always',
   endOfLine: 'lf',
   printWidth: 100,
-  semi: true,
+  semi: false,
   singleQuote: true,
   tabWidth: 2,
   trailingComma: 'all',
-};
+}
 
-export default config;
+export default config

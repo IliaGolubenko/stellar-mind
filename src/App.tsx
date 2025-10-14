@@ -1,43 +1,43 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react'
 
-import './App.css';
+import './App.css'
 
-import GalaxyScene from './components/GalaxyScene';
-import PlanetTooltip from './components/PlanetTooltip';
-import type { Exoplanet } from './types/exoplanet';
-import useExoplanets from './hooks/useExoplanets';
+import GalaxyScene from './components/GalaxyScene'
+import PlanetTooltip from './components/PlanetTooltip'
+import type { Exoplanet } from './types/exoplanet'
+import useExoplanets from './hooks/useExoplanets'
 
 const selectRandomPlanets = (planets: Exoplanet[], count = 4) => {
   if (planets.length <= count) {
-    return planets;
+    return planets
   }
 
   const prioritized = planets.filter(
     (planet) => planet.pl_rade !== null && planet.pl_bmasse !== null,
-  );
-  const pool = prioritized.length >= count ? prioritized : planets;
-  const candidates = [...pool];
+  )
+  const pool = prioritized.length >= count ? prioritized : planets
+  const candidates = [...pool]
 
   for (let i = candidates.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[candidates[i], candidates[j]] = [candidates[j], candidates[i]]
   }
 
-  return candidates.slice(0, count);
-};
+  return candidates.slice(0, count)
+}
 
 function App() {
-  const { items, status, error } = useExoplanets();
-  const [selectedPlanet, setSelectedPlanet] = useState<Exoplanet | null>(null);
-  const [hoveredPlanet, setHoveredPlanet] = useState<Exoplanet | null>(null);
+  const { items, status, error } = useExoplanets()
+  const [selectedPlanet, setSelectedPlanet] = useState<Exoplanet | null>(null)
+  const [hoveredPlanet, setHoveredPlanet] = useState<Exoplanet | null>(null)
 
-  const featuredPlanets = useMemo(() => selectRandomPlanets(items), [items]);
-  const activePlanet = selectedPlanet ?? hoveredPlanet ?? featuredPlanets[0] ?? null;
+  const featuredPlanets = useMemo(() => selectRandomPlanets(items), [items])
+  const activePlanet = selectedPlanet ?? hoveredPlanet ?? featuredPlanets[0] ?? null
 
   useEffect(() => {
-    setSelectedPlanet(null);
-    setHoveredPlanet(null);
-  }, [items]);
+    setSelectedPlanet(null)
+    setHoveredPlanet(null)
+  }, [items])
 
   return (
     <main className="app-shell">
@@ -76,7 +76,7 @@ function App() {
         <p>Drag or swipe to rotate. Click a planet to pin its details.</p>
       </footer>
     </main>
-  );
+  )
 }
 
-export default App;
+export default App

@@ -1,20 +1,20 @@
-import { useEffect } from 'react';
+import { useEffect } from 'react'
 
-import { fetchExoplanets } from '../store/exoplanetsSlice';
-import useAppDispatch from './useAppDispatch';
-import useAppSelector from './useAppSelector';
+import { fetchExoplanets } from '../store/exoplanetsSlice'
+import useAppDispatch from './useAppDispatch'
+import useAppSelector from './useAppSelector'
 
 const useExoplanets = () => {
-  const dispatch = useAppDispatch();
-  const { items, status, error } = useAppSelector((state) => state.exoplanets);
+  const dispatch = useAppDispatch()
+  const { items, status, error } = useAppSelector((state) => state.exoplanets)
 
   useEffect(() => {
     if (status === 'idle') {
-      void dispatch(fetchExoplanets());
+      void dispatch(fetchExoplanets())
     }
-  }, [dispatch, status]);
+  }, [dispatch, status])
 
-  return { items, status, error } as const;
-};
+  return { items, status, error } as const
+}
 
-export default useExoplanets;
+export default useExoplanets
