@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useTexture } from '@react-three/drei';
 import type { Exoplanet } from '../types/exoplanet';
@@ -9,12 +9,12 @@ import {
   Texture,
   TextureLoader,
   SRGBColorSpace,
-  type Sprite,
-  SpriteMaterial,
   type BufferAttribute,
   type Group,
-  type Mesh,
   type PointsMaterial,
+  type Mesh,
+  type Sprite,
+  SpriteMaterial,
 } from 'three';
 
 interface GalaxySceneProps {
@@ -30,14 +30,10 @@ interface PlanetInstance {
   scale: number;
 }
 
-interface FogPatch {
+interface HazeSpriteInfo {
   id: number;
   position: [number, number, number];
-  rotation: number;
-  scale: number;
-  stretch: number;
-  color: string;
-  opacity: number;
+  size: number;
 }
 
 const GALAXY_COLORS = ['#7dd3fc', '#a855f7', '#f472b6', '#f9a8d4', '#fef08a'];
@@ -54,7 +50,11 @@ const starTypes = {
   color: [0xffcc6f, 0xffd2a1, 0xfff4ea, 0xf8f7ff, 0xcad7ff, 0xaabfff],
   size: [0.7, 0.7, 1.15, 1.48, 2.0, 2.5, 3.5],
 } as const;
-const FOG_COLORS = ['#6366f1', '#7c3aed', '#8b5cf6', '#22d3ee'];
+
+const NUM_STARS = 20000;
+const NUM_GALAXY_ARMS = 5;
+const HAZE_RATIO = 0.005;
+
 const GALAXY_TILT = 0.2;
 const GALAXY_ROTATION_SPEED = 0.025;
 const GALAXY_CORE_BASE_SIZE = 0.1;
@@ -62,6 +62,11 @@ const STAR_FIELD_BASE_SIZE = 2.6;
 const STAR_HALO_BASE_SIZE = 4.2;
 const BASE_CAMERA_DISTANCE = 24;
 const MAX_STAR_SIZE_MULTIPLIER = 8.4;
+const BASE_LAYER = 0;
+const HAZE_MIN_SIZE = 30;
+const HAZE_MAX_SIZE = 60;
+const HAZE_OPACITY = 0.85;
+const HAZE_COLOR = '#0082ff';
 
 const randomBetween = (min: number, max: number) => Math.random() * (max - min) + min;
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
@@ -88,10 +93,18 @@ interface GalaxyStarBucket {
   sizeMultiplier: number;
 }
 
-const generateGalaxyPositions = (points = 200000, arms = 5, radius = 95): GalaxyStarBucket[] => {
+interface GalaxyStarData {
+  buckets: GalaxyStarBucket[];
+  positions: Float32Array;
+  colors: Float32Array;
+}
+
+const generateGalaxyPositions = (radius = 95): GalaxyStarData => {
   const bucketCount = STAR_TYPE_COLORS.length;
   const positionBuckets = Array.from({ length: bucketCount }, () => [] as number[]);
   const colorBuckets = Array.from({ length: bucketCount }, () => [] as number[]);
+  const allPositions: number[] = [];
+  const allColors: number[] = [];
 
   const totalPercentage = starTypes.percentage.reduce((total, value) => total + value, 0);
   const typeThresholds = starTypes.percentage.reduce<number[]>((acc, value, index) => {
@@ -100,9 +113,9 @@ const generateGalaxyPositions = (points = 200000, arms = 5, radius = 95): Galaxy
     return acc;
   }, []);
 
-  for (let i = 0; i < points; i += 1) {
-    const armIndex = i % arms;
-    const armAngle = (armIndex / arms) * Math.PI * 2;
+  for (let i = 0; i < NUM_STARS; i += 1) {
+    const armIndex = i % NUM_GALAXY_ARMS;
+    const armAngle = (armIndex / NUM_GALAXY_ARMS) * Math.PI * 2;
     const distance = Math.pow(Math.random(), 1.35) * radius;
     const coreBias = Math.max(0, 1 - distance / (radius * 0.9));
     const armThickness = 6 + coreBias * 20;
@@ -128,18 +141,26 @@ const generateGalaxyPositions = (points = 200000, arms = 5, radius = 95): Galaxy
     const coreMultiplier = clamp(brightness, 0.35, 1.2);
 
     positionBuckets[bucketIndex].push(x, y, z);
-    colorBuckets[bucketIndex].push(
-      clamp(baseColor.r * coreMultiplier, 0, 1),
-      clamp(baseColor.g * coreMultiplier, 0, 1),
-      clamp(baseColor.b * coreMultiplier, 0, 1),
-    );
+    allPositions.push(x, y, z);
+    const colorR = clamp(baseColor.r * coreMultiplier, 0, 1);
+    const colorG = clamp(baseColor.g * coreMultiplier, 0, 1);
+    const colorB = clamp(baseColor.b * coreMultiplier, 0, 1);
+
+    colorBuckets[bucketIndex].push(colorR, colorG, colorB);
+    allColors.push(colorR, colorG, colorB);
   }
 
-  return positionBuckets.map((positions, index) => ({
+  const buckets = positionBuckets.map((positions, index) => ({
     positions: new Float32Array(positions),
     colors: new Float32Array(colorBuckets[index]),
     sizeMultiplier: starTypes.size[Math.min(index, starTypes.size.length - 1)] ?? starTypes.size[0],
   }));
+
+  return {
+    buckets,
+    positions: new Float32Array(allPositions),
+    colors: new Float32Array(allColors),
+  };
 };
 
 const createStarField = (count = 3200, minRadius = 300, maxRadius = 480) => {
@@ -179,38 +200,110 @@ const createStarField = (count = 3200, minRadius = 300, maxRadius = 480) => {
   return { positions, colors, baseColors, flickerSpeeds, flickerOffsets } as const;
 };
 
-const createFogPatches = (count = 60, arms = 5): FogPatch[] =>
-  Array.from({ length: count }, (_, index) => {
-    const armIndex = index % arms;
-    const radius = randomBetween(26, 90);
-    const armAngle = (armIndex / arms) * Math.PI * 2;
-    const curveOffset = radius * 0.05;
-    const angle = armAngle + curveOffset + randomBetween(-0.18, 0.18);
-    const tangent = angle + Math.PI / 2;
-    const coreBias = Math.max(0, 1 - radius / 140);
-    const radialFalloff = Math.max(0.25, 1 - radius / 200);
+const createHazeField = (starPositions: Float32Array, ratio = HAZE_RATIO): HazeSpriteInfo[] => {
+  const totalStars = starPositions.length / 3;
+  if (totalStars === 0 || ratio <= 0) {
+    return [];
+  }
+
+  const targetCount = Math.min(totalStars, Math.max(1, Math.floor(totalStars * ratio)));
+
+  const usedIndices = new Set<number>();
+  const haze: HazeSpriteInfo[] = [];
+
+  while (haze.length < targetCount) {
+    const starIndex = Math.floor(Math.random() * totalStars);
+    if (usedIndices.has(starIndex)) {
+      continue;
+    }
+    usedIndices.add(starIndex);
+
+    const baseX = starPositions[starIndex * 3];
+    const baseY = starPositions[starIndex * 3 + 1];
+    const baseZ = starPositions[starIndex * 3 + 2];
 
     const position: [number, number, number] = [
-      Math.cos(angle) * radius + randomBetween(-2.5, 2.5) * radialFalloff,
-      randomBetween(-0.5, 0.5) * (0.25 + coreBias * 0.5),
-      Math.sin(angle) * radius + randomBetween(-2.5, 2.5) * radialFalloff,
+      baseX + gaussianRandom(0, 2.4),
+      baseY * 0.4 + gaussianRandom(0, 0.6),
+      baseZ + gaussianRandom(0, 2.4),
     ];
 
-    return {
-      id: index,
+    const size = clamp(
+      HAZE_MIN_SIZE + Math.random() * (HAZE_MAX_SIZE - HAZE_MIN_SIZE),
+      HAZE_MIN_SIZE,
+      HAZE_MAX_SIZE,
+    );
+
+    haze.push({
+      id: starIndex,
       position,
-      rotation: tangent + randomBetween(-0.35, 0.35),
-      scale: randomBetween(12, 26) * (1 - radius / 280) + coreBias * 6,
-      stretch: 1.8 + coreBias * 1.3 + Math.random() * 0.35,
-      color: FOG_COLORS[Math.floor(Math.random() * FOG_COLORS.length)],
-      opacity: randomBetween(0.18, 0.32) + coreBias * 0.06,
-    };
+      size,
+    });
+  }
+
+  return haze;
+};
+
+const GalaxyHazeField = ({ starPositions }: { starPositions: Float32Array }) => {
+  const hazeTexture = useTexture('/feathered60.png') as Texture;
+  const hazePatches = useMemo(() => createHazeField(starPositions), [starPositions]);
+  const spriteRefs = useRef<Sprite[]>([]);
+
+  useEffect(() => {
+    hazeTexture.colorSpace = SRGBColorSpace;
+    hazeTexture.needsUpdate = true;
+  }, [hazeTexture]);
+
+  useFrame(({ camera }) => {
+    spriteRefs.current.forEach((sprite) => {
+      if (!sprite) {
+        return;
+      }
+      const material = sprite.material as SpriteMaterial;
+      const distance = sprite.position.distanceTo(camera.position) / 250;
+      const targetOpacity = clamp(HAZE_OPACITY * Math.pow(distance / 2.5, 2), 0, HAZE_OPACITY);
+
+      if (Math.abs(material.opacity - targetOpacity) > 0.001) {
+        material.opacity = targetOpacity;
+        material.needsUpdate = true;
+      }
+    });
   });
 
-const GalaxyArms = () => {
+  return (
+    <group>
+      {hazePatches.map((patch, index) => (
+        <sprite
+          key={`haze-${patch.id}-${index}`}
+          position={patch.position}
+          scale={[patch.size, patch.size, patch.size]}
+          ref={(sprite) => {
+            if (sprite) {
+              sprite.layers.set(BASE_LAYER);
+            }
+            spriteRefs.current[index] = sprite ?? null;
+          }}
+        >
+          <spriteMaterial
+            map={hazeTexture}
+            color={HAZE_COLOR}
+            opacity={HAZE_OPACITY}
+            transparent
+            depthTest={false}
+            depthWrite={false}
+            blending={AdditiveBlending}
+            toneMapped={false}
+          />
+        </sprite>
+      ))}
+    </group>
+  );
+};
+
+const GalaxyArms = ({ galaxyData }: { galaxyData: GalaxyStarData }) => {
   const groupRef = useRef<Group>(null);
   const coreMaterialRefs = useRef<Array<PointsMaterial | null>>([]);
-  const starBuckets = useMemo(() => generateGalaxyPositions(), []);
+  const starBuckets = galaxyData.buckets;
   const sprite = useMemo(() => getStarTexture(), []);
 
   useFrame(({ clock, camera }) => {
@@ -395,7 +488,7 @@ const BackgroundStars = () => {
   const starMaterialRef = useRef<PointsMaterial | null>(null);
   const haloMaterialRef = useRef<PointsMaterial | null>(null);
 
-  useFrame(({ clock, camera }) => {
+  useFrame(({ clock }) => {
     const attribute = colorAttributeRef.current;
     if (!attribute) {
       return;
@@ -481,83 +574,35 @@ const BackgroundStars = () => {
   );
 };
 
-const GalaxyFog = () => {
-  const patches = useMemo(() => createFogPatches(), []);
-  const fogGroupRef = useRef<Group>(null);
-  const spriteRefs = useRef<Sprite[]>([]);
-  const hazeTexture = useTexture('/feathered60.png');
-
-  useFrame(({ clock, camera }) => {
-    if (fogGroupRef.current) {
-      fogGroupRef.current.rotation.y = clock.elapsedTime * GALAXY_ROTATION_SPEED;
-    }
-
-    spriteRefs.current.forEach((sprite, index) => {
-      if (!sprite) {
-        return;
-      }
-      const patch = patches[index];
-      const material = sprite.material as SpriteMaterial;
-      const dist = sprite.position.distanceTo(camera.position) / 250;
-      material.opacity = clamp(patch.opacity * Math.pow(dist / 2.5, 2), 0, patch.opacity);
-      material.needsUpdate = true;
-      material.rotation = patch.rotation;
-    });
-  });
+const SceneContents = ({ planets, onPlanetSelect, onPlanetHover }: GalaxySceneProps) => {
+  const galaxyData = useMemo(() => generateGalaxyPositions(), []);
 
   return (
-    <group ref={fogGroupRef}>
-      {patches.map((patch, index) => (
-        <sprite
-          key={patch.id}
-          ref={(node) => {
-            if (node) {
-              spriteRefs.current[index] = node;
-            }
-          }}
-          position={patch.position}
-          scale={[patch.scale * patch.stretch, patch.scale * 0.35, 1]}
-        >
-          <spriteMaterial
-            map={hazeTexture}
-            color={patch.color}
-            transparent
-            depthTest={false}
-            depthWrite={false}
-            blending={AdditiveBlending}
-            opacity={patch.opacity}
-          />
-        </sprite>
-      ))}
-    </group>
+    <>
+      <ambientLight intensity={0.38} />
+      <pointLight position={[0, 26, 0]} intensity={1} color="#f8fafc" />
+      <BackgroundStars />
+      <group rotation={[GALAXY_TILT, 0, 0]}>
+        <GalaxyArms galaxyData={galaxyData} />
+        <GalaxyHazeField starPositions={galaxyData.positions} />
+        <PlanetsField
+          planets={planets}
+          onSelect={onPlanetSelect}
+          onHover={onPlanetHover ?? (() => {})}
+        />
+      </group>
+      <OrbitControls
+        enableZoom
+        enablePan={false}
+        minPolarAngle={Math.PI / 5}
+        maxPolarAngle={(Math.PI * 3) / 4}
+        minDistance={24}
+        maxDistance={210}
+        zoomSpeed={0.65}
+      />
+    </>
   );
 };
-
-const SceneContents = ({ planets, onPlanetSelect, onPlanetHover }: GalaxySceneProps) => (
-  <>
-    <ambientLight intensity={0.38} />
-    <pointLight position={[0, 26, 0]} intensity={1} color="#f8fafc" />
-    <BackgroundStars />
-    <group rotation={[GALAXY_TILT, 0, 0]}>
-      <GalaxyArms />
-      <GalaxyFog />
-      <PlanetsField
-        planets={planets}
-        onSelect={onPlanetSelect}
-        onHover={onPlanetHover ?? (() => {})}
-      />
-    </group>
-    <OrbitControls
-      enableZoom
-      enablePan={false}
-      minPolarAngle={Math.PI / 5}
-      maxPolarAngle={(Math.PI * 3) / 4}
-      minDistance={24}
-      maxDistance={210}
-      zoomSpeed={0.65}
-    />
-  </>
-);
 
 const GalaxyScene = ({ planets, onPlanetSelect, onPlanetHover }: GalaxySceneProps) => (
   <Canvas camera={{ position: [0, 18, 65], fov: 55 }}>
