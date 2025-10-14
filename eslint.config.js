@@ -23,7 +23,7 @@ export default defineConfig([
       sourceType: 'module',
     },
     rules: {
-      semi: ['error', 'never'],
+      semi: ['never'],
     },
   },
 ])

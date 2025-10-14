@@ -44,18 +44,16 @@ const BackgroundStars = () => {
           <bufferGeometry>
             <bufferAttribute
               attach="attributes-position"
-              array={starField.positions}
+              args={[starField.positions, 3]}
               count={starField.positions.length / 3}
-              itemSize={3}
             />
             <bufferAttribute
               ref={(attribute) => {
                 colorAttributeRef.current = attribute ?? null
               }}
               attach="attributes-color"
-              array={starField.colors}
+              args={[starField.colors, 3]}
               count={starField.colors.length / 3}
-              itemSize={3}
             />
           </bufferGeometry>
           <pointsMaterial
@@ -78,9 +76,8 @@ const BackgroundStars = () => {
           <bufferGeometry>
             <bufferAttribute
               attach="attributes-position"
-              array={starField.positions}
+              args={[starField.positions, 3]}
               count={starField.positions.length / 3}
-              itemSize={3}
             />
           </bufferGeometry>
           <pointsMaterial

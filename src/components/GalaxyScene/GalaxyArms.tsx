@@ -58,15 +58,13 @@ const GalaxyArms = ({ galaxyData }: GalaxyArmsProps) => {
             <bufferGeometry attach="geometry">
               <bufferAttribute
                 attach="attributes-position"
-                array={bucket.positions}
+                args={[bucket.positions, 3]}
                 count={bucket.positions.length / 3}
-                itemSize={3}
               />
               <bufferAttribute
                 attach="attributes-color"
-                array={bucket.colors}
+                args={[bucket.colors, 3]}
                 count={bucket.colors.length / 3}
-                itemSize={3}
               />
             </bufferGeometry>
             <pointsMaterial
