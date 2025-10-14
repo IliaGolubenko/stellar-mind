@@ -2,16 +2,19 @@ import { useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useTexture } from '@react-three/drei';
 import type { Exoplanet } from '../types/exoplanet';
+import { gaussianRandom } from '../utils/utils';
 import {
   AdditiveBlending,
   Color,
   Texture,
+  TextureLoader,
+  SRGBColorSpace,
   type Sprite,
   SpriteMaterial,
   type BufferAttribute,
   type Group,
   type Mesh,
-  type Points,
+  type PointsMaterial,
 } from 'three';
 
 interface GalaxySceneProps {
@@ -38,65 +41,64 @@ interface FogPatch {
 }
 
 const GALAXY_COLORS = ['#7dd3fc', '#a855f7', '#f472b6', '#f9a8d4', '#fef08a'];
-const STAR_COLOR_PALETTE = ['#fefefe', '#fcd34d', '#f97316', '#fb7185', '#60a5fa', '#a855f7'];
+const BACKGROUND_STAR_COLOR_PALETTE = [
+  '#fefefe',
+  '#fcd34d',
+  '#f97316',
+  '#fb7185',
+  '#60a5fa',
+  '#a855f7',
+];
+const starTypes = {
+  percentage: [76.45, 12.1, 7.6, 3.0, 0.6, 0.13],
+  color: [0xffcc6f, 0xffd2a1, 0xfff4ea, 0xf8f7ff, 0xcad7ff, 0xaabfff],
+  size: [0.7, 0.7, 1.15, 1.48, 2.0, 2.5, 3.5],
+} as const;
 const FOG_COLORS = ['#6366f1', '#7c3aed', '#8b5cf6', '#22d3ee'];
 const GALAXY_TILT = 0.2;
 const GALAXY_ROTATION_SPEED = 0.025;
+const GALAXY_CORE_BASE_SIZE = 0.1;
+const STAR_FIELD_BASE_SIZE = 2.6;
+const STAR_HALO_BASE_SIZE = 4.2;
+const BASE_CAMERA_DISTANCE = 24;
+const MAX_STAR_SIZE_MULTIPLIER = 8.4;
 
 const randomBetween = (min: number, max: number) => Math.random() * (max - min) + min;
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
-const createCircleTexture = () => {
-  if (typeof document === 'undefined') {
-    return null;
-  }
-
-  const size = 128;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext('2d');
-
-  if (!context) {
-    return null;
-  }
-
-  const gradient = context.createRadialGradient(
-    size / 2,
-    size / 2,
-    0,
-    size / 2,
-    size / 2,
-    size / 2,
-  );
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.45, 'rgba(255,255,255,0.85)');
-  gradient.addColorStop(0.8, 'rgba(255,255,255,0.45)');
-  gradient.addColorStop(1, 'rgba(255,255,255,0)');
-
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, size, size);
-
-  const texture = new Texture(canvas);
-  texture.needsUpdate = true;
-
-  return texture;
-};
-
-const getCircleTexture = (() => {
+const getStarTexture = (() => {
   let cachedTexture: Texture | null = null;
+
   return () => {
-    if (!cachedTexture) {
-      cachedTexture = createCircleTexture();
+    if (!cachedTexture && typeof window !== 'undefined') {
+      const loader = new TextureLoader();
+      cachedTexture = loader.load('/sprite120.png');
+      cachedTexture.colorSpace = SRGBColorSpace;
     }
+
     return cachedTexture;
   };
 })();
 
-const generateGalaxyPositions = (points = 12000, arms = 5, radius = 95) => {
-  const positions = new Float32Array(points * 3);
-  const colors = new Float32Array(points * 3);
-  const color = new Color();
+const STAR_TYPE_COLORS = starTypes.color.map((hex) => new Color(hex));
+
+interface GalaxyStarBucket {
+  positions: Float32Array;
+  colors: Float32Array;
+  sizeMultiplier: number;
+}
+
+const generateGalaxyPositions = (points = 200000, arms = 5, radius = 95): GalaxyStarBucket[] => {
+  const bucketCount = STAR_TYPE_COLORS.length;
+  const positionBuckets = Array.from({ length: bucketCount }, () => [] as number[]);
+  const colorBuckets = Array.from({ length: bucketCount }, () => [] as number[]);
+
+  const totalPercentage = starTypes.percentage.reduce((total, value) => total + value, 0);
+  const typeThresholds = starTypes.percentage.reduce<number[]>((acc, value, index) => {
+    const cumulative = value / totalPercentage + (acc[index - 1] ?? 0);
+    acc.push(cumulative);
+    return acc;
+  }, []);
 
   for (let i = 0; i < points; i += 1) {
     const armIndex = i % arms;
@@ -104,7 +106,7 @@ const generateGalaxyPositions = (points = 12000, arms = 5, radius = 95) => {
     const distance = Math.pow(Math.random(), 1.35) * radius;
     const coreBias = Math.max(0, 1 - distance / (radius * 0.9));
     const armThickness = 6 + coreBias * 20;
-    const angleOffset = distance * 0.045 + randomBetween(-0.16, 0.16);
+    const angleOffset = distance * 0.045 + clamp(gaussianRandom(0, 0.12), -0.4, 0.4);
     const angle = armAngle + angleOffset;
 
     const radialFalloff = Math.max(0.3, 1 - distance / radius);
@@ -112,28 +114,32 @@ const generateGalaxyPositions = (points = 12000, arms = 5, radius = 95) => {
     const verticalSpread = (0.9 + coreBias * 3.4) * radialFalloff;
     const compression = 1 - coreBias * 0.35;
 
-    const x = Math.cos(angle) * distance * compression + randomBetween(-spread, spread);
-    const y = randomBetween(-verticalSpread, verticalSpread) * compression;
-    const z = Math.sin(angle) * distance * compression + randomBetween(-spread, spread);
+    const x = Math.cos(angle) * distance * compression + gaussianRandom(0, spread / 2);
+    const y = gaussianRandom(0, verticalSpread / 2) * compression;
+    const z = Math.sin(angle) * distance * compression + gaussianRandom(0, spread / 2);
 
-    positions[i * 3] = x;
-    positions[i * 3 + 1] = y;
-    positions[i * 3 + 2] = z;
+    const randomPick = Math.random();
+    const typeIndex = typeThresholds.findIndex((threshold) => randomPick <= threshold);
+    const bucketIndex = typeIndex === -1 ? bucketCount - 1 : typeIndex;
 
     const radialFactor = distance / radius;
     const brightness = 1.1 - radialFactor * 0.85;
-    const hue = 0.58 + randomBetween(-0.05, 0.05) - radialFactor * 0.05;
-    const saturation = 0.65 + radialFactor * 0.2;
-    const lightness = 0.6 + (1 - radialFactor) * 0.25;
+    const baseColor = STAR_TYPE_COLORS[bucketIndex];
+    const coreMultiplier = clamp(brightness, 0.35, 1.2);
 
-    color.setHSL(hue, saturation, lightness);
-
-    colors[i * 3] = color.r * brightness;
-    colors[i * 3 + 1] = color.g * brightness;
-    colors[i * 3 + 2] = color.b * brightness;
+    positionBuckets[bucketIndex].push(x, y, z);
+    colorBuckets[bucketIndex].push(
+      clamp(baseColor.r * coreMultiplier, 0, 1),
+      clamp(baseColor.g * coreMultiplier, 0, 1),
+      clamp(baseColor.b * coreMultiplier, 0, 1),
+    );
   }
 
-  return { positions, colors };
+  return positionBuckets.map((positions, index) => ({
+    positions: new Float32Array(positions),
+    colors: new Float32Array(colorBuckets[index]),
+    sizeMultiplier: starTypes.size[Math.min(index, starTypes.size.length - 1)] ?? starTypes.size[0],
+  }));
 };
 
 const createStarField = (count = 3200, minRadius = 300, maxRadius = 480) => {
@@ -142,7 +148,7 @@ const createStarField = (count = 3200, minRadius = 300, maxRadius = 480) => {
   const baseColors = new Float32Array(count * 3);
   const flickerSpeeds = new Float32Array(count);
   const flickerOffsets = new Float32Array(count);
-  const palette = STAR_COLOR_PALETTE.map((hex) => new Color(hex));
+  const palette = BACKGROUND_STAR_COLOR_PALETTE.map((hex) => new Color(hex));
 
   for (let i = 0; i < count; i += 1) {
     const distanceRange = maxRadius - minRadius;
@@ -202,45 +208,75 @@ const createFogPatches = (count = 60, arms = 5): FogPatch[] =>
   });
 
 const GalaxyArms = () => {
-  const groupRef = useRef<Points>(null);
-  const { positions, colors } = useMemo(() => generateGalaxyPositions(), []);
-  const sprite = getCircleTexture();
+  const groupRef = useRef<Group>(null);
+  const coreMaterialRefs = useRef<Array<PointsMaterial | null>>([]);
+  const starBuckets = useMemo(() => generateGalaxyPositions(), []);
+  const sprite = useMemo(() => getStarTexture(), []);
 
-  useFrame(({ clock }) => {
-    if (!groupRef.current) return;
-    groupRef.current.rotation.y = clock.elapsedTime * GALAXY_ROTATION_SPEED;
+  useFrame(({ clock, camera }) => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y = clock.elapsedTime * GALAXY_ROTATION_SPEED;
+    }
+
+    const distance = camera.position.length();
+    const scale = clamp(distance / BASE_CAMERA_DISTANCE, 1, MAX_STAR_SIZE_MULTIPLIER);
+    const baseSize = GALAXY_CORE_BASE_SIZE * scale;
+
+    starBuckets.forEach((bucket, index) => {
+      const coreMat = coreMaterialRefs.current[index];
+      if (coreMat) {
+        const targetSize = baseSize * bucket.sizeMultiplier;
+        if (Math.abs(coreMat.size - targetSize) > 0.001) {
+          coreMat.size = targetSize;
+          coreMat.needsUpdate = true;
+        }
+      }
+    });
   });
 
+  coreMaterialRefs.current.length = starBuckets.length;
+
   return (
-    <points ref={groupRef}>
-      <bufferGeometry attach="geometry">
-        <bufferAttribute
-          attach="attributes-position"
-          array={positions}
-          count={positions.length / 3}
-          itemSize={3}
-        />
-        <bufferAttribute
-          attach="attributes-color"
-          array={colors}
-          count={colors.length / 3}
-          itemSize={3}
-        />
-      </bufferGeometry>
-      <pointsMaterial
-        attach="material"
-        vertexColors
-        size={1.25}
-        sizeAttenuation
-        transparent
-        opacity={1}
-        depthWrite={false}
-        blending={AdditiveBlending}
-        map={sprite ?? undefined}
-        alphaMap={sprite ?? undefined}
-        alphaTest={0.05}
-      />
-    </points>
+    <group ref={groupRef}>
+      {starBuckets.map((bucket, index) => {
+        if (bucket.positions.length === 0) {
+          return null;
+        }
+
+        const key = `galaxy-arm-type-${index}`;
+
+        return (
+          <points key={key}>
+            <bufferGeometry attach="geometry">
+              <bufferAttribute
+                attach="attributes-position"
+                array={bucket.positions}
+                count={bucket.positions.length / 3}
+                itemSize={3}
+              />
+              <bufferAttribute
+                attach="attributes-color"
+                array={bucket.colors}
+                count={bucket.colors.length / 3}
+                itemSize={3}
+              />
+            </bufferGeometry>
+            <pointsMaterial
+              ref={(material) => {
+                coreMaterialRefs.current[index] = material;
+              }}
+              vertexColors
+              size={GALAXY_CORE_BASE_SIZE * bucket.sizeMultiplier}
+              sizeAttenuation
+              depthWrite
+              map={sprite ?? undefined}
+              alphaMap={sprite ?? undefined}
+              alphaTest={0.25}
+            />
+          </points>
+        );
+      })}
+    </group>
   );
 };
 
@@ -350,14 +386,16 @@ const PlanetsField = ({
   );
 };
 
-const ColoredStars = () => {
+const BackgroundStars = () => {
   const groupRef = useRef<Group>(null);
   const haloGroupRef = useRef<Group>(null);
   const colorAttributeRef = useRef<BufferAttribute | null>(null);
   const starField = useMemo(() => createStarField(), []);
-  const sprite = getCircleTexture();
+  const sprite = useMemo(() => getStarTexture(), []);
+  const starMaterialRef = useRef<PointsMaterial | null>(null);
+  const haloMaterialRef = useRef<PointsMaterial | null>(null);
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock, camera }) => {
     const attribute = colorAttributeRef.current;
     if (!attribute) {
       return;
@@ -400,11 +438,12 @@ const ColoredStars = () => {
             />
           </bufferGeometry>
           <pointsMaterial
+            ref={starMaterialRef}
             vertexColors
-            size={1.6}
+            size={STAR_FIELD_BASE_SIZE}
             sizeAttenuation
             transparent
-            opacity={0.95}
+            opacity={1}
             depthWrite={false}
             blending={AdditiveBlending}
             map={sprite ?? undefined}
@@ -424,10 +463,11 @@ const ColoredStars = () => {
             />
           </bufferGeometry>
           <pointsMaterial
+            ref={haloMaterialRef}
             color="#fdf8ff"
             transparent
             opacity={0.16}
-            size={4.2}
+            size={STAR_HALO_BASE_SIZE}
             sizeAttenuation
             depthWrite={false}
             blending={AdditiveBlending}
@@ -497,7 +537,7 @@ const SceneContents = ({ planets, onPlanetSelect, onPlanetHover }: GalaxyScenePr
   <>
     <ambientLight intensity={0.38} />
     <pointLight position={[0, 26, 0]} intensity={1} color="#f8fafc" />
-    <ColoredStars />
+    <BackgroundStars />
     <group rotation={[GALAXY_TILT, 0, 0]}>
       <GalaxyArms />
       <GalaxyFog />
@@ -512,7 +552,7 @@ const SceneContents = ({ planets, onPlanetSelect, onPlanetHover }: GalaxyScenePr
       enablePan={false}
       minPolarAngle={Math.PI / 5}
       maxPolarAngle={(Math.PI * 3) / 4}
-      minDistance={54}
+      minDistance={24}
       maxDistance={210}
       zoomSpeed={0.65}
     />
