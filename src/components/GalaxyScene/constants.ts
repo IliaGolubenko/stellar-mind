@@ -1,5 +1,3 @@
-export const GALAXY_COLORS = ['#7dd3fc', '#a855f7', '#f472b6', '#f9a8d4', '#fef08a'] as const
-
 export const BACKGROUND_STAR_COLOR_PALETTE = [
   '#fefefe',
   '#fcd34d',

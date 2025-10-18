@@ -9,7 +9,7 @@ export interface GalaxySceneProps {
 export interface PlanetInstance {
   planet: Exoplanet
   position: [number, number, number]
-  color: string
+  baseColor: string
   scale: number
 }
 

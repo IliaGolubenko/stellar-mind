@@ -16,3 +16,5 @@ const PROD_FALLBACK_URL = `https://api.allorigins.win/raw?url=${encodeURICompone
 export const NASA_EXOPLANETS_URL =
   import.meta.env.VITE_NASA_EXOPLANETS_URL ??
   (import.meta.env.DEV ? DEV_PROXY_URL : PROD_FALLBACK_URL)
+
+export const IS_DEV = Boolean(import.meta.env?.DEV)
