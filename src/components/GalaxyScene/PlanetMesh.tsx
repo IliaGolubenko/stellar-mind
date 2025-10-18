@@ -39,7 +39,7 @@ const PlanetMesh = ({
   onPointerOver,
   onPointerOut,
   emissiveIntensityMultiplier = 1,
-  displacementScaleMultiplier = 1,
+  displacementScaleMultiplier = 5,
   geometryDetail,
 }: PlanetMeshProps) => {
   const groupRef = useRef<Group>(null)
