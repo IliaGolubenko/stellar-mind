@@ -1,4 +1,4 @@
-import { Suspense, useMemo } from 'react'
+import { Suspense, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 
 import type { Exoplanet } from '../types/exoplanet'
@@ -9,6 +9,7 @@ import PlanetMesh from './GalaxyScene/PlanetMesh'
 interface PlanetTooltipProps {
   planet: Exoplanet | null
   visible: boolean
+  onClose: () => void
 }
 
 const renderMetric = (label: string, value: string | number | null) => (
@@ -28,21 +29,44 @@ const formatNumber = (value: number | null, digits = 2) => {
   return value.toFixed(digits)
 }
 
-const PlanetTooltip = ({ planet, visible }: PlanetTooltipProps) => {
-  if (!visible || !planet) {
+const formatTemperatureCelsius = (kelvin: number | null) => {
+  if (kelvin === null || Number.isNaN(kelvin)) return 'N/A'
+
+  const celsius = kelvin - 273.15
+  return formatNumber(celsius, 0)
+}
+
+const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
+  const visual = useMemo(
+    () => (planet ? getPlanetVisual(planet) : null),
+    [planet],
+  )
+  const previewBaseColor = useMemo(
+    () => (visual ? getPlanetBaseColor(visual.type) : '#ffffff'),
+    [visual],
+  )
+  const [showAtmosphere, setShowAtmosphere] = useState(true)
+
+  if (!visible || !planet || !visual) {
     return null
   }
 
-  const visual = useMemo(() => getPlanetVisual(planet), [planet])
   const devMetadata = IS_DEV ? visual : null
-
-  const previewBaseColor = useMemo(() => getPlanetBaseColor(visual.type), [visual.type])
-
   return (
-    <aside className="tooltip">
-      <header>
-        <p>Featured Exoplanet</p>
-        <h2>{planet.pl_name}</h2>
+    <aside className="tooltip" role="dialog" aria-modal="false">
+      <header className="tooltip__header">
+        <div className="tooltip__header-text">
+          <p>Featured Exoplanet</p>
+          <h2>{planet.pl_name}</h2>
+        </div>
+        <button
+          type="button"
+          className="tooltip__close"
+          onClick={onClose}
+          aria-label="Close planet details"
+        >
+          Close
+        </button>
       </header>
       <div
         className="tooltip__planet-preview"
@@ -57,14 +81,25 @@ const PlanetTooltip = ({ planet, visible }: PlanetTooltipProps) => {
               baseColor={previewBaseColor}
               scale={1}
               rotationSpeed={0.18}
-              showAtmosphere
+              showAtmosphere={showAtmosphere}
               emissiveIntensityMultiplier={0.55}
             />
           </Suspense>
         </Canvas>
       </div>
+      <div className="tooltip__controls">
+        <label>
+          <input
+            type="checkbox"
+            checked={showAtmosphere}
+            onChange={(event) => setShowAtmosphere(event.target.checked)}
+          />
+          Show atmosphere
+        </label>
+      </div>
       <ul>
         {devMetadata && renderMetric('Texture Key (dev)', devMetadata.textureKey)}
+        {devMetadata && renderMetric('Atmosphere (dev)', devMetadata.atmosphere)}
         {renderMetric('Host Star', planet.hostname)}
         {renderMetric('Discovery Method', planet.discoverymethod)}
         {renderMetric('Discovery Year', planet.disc_year)}
@@ -85,8 +120,8 @@ const PlanetTooltip = ({ planet, visible }: PlanetTooltipProps) => {
           planet.pl_dens !== null ? formatNumber(planet.pl_dens) : null,
         )}
         {renderMetric(
-          'Equilibrium Temp (K)',
-          planet.pl_eqt !== null ? formatNumber(planet.pl_eqt, 0) : null,
+          'Equilibrium Temp (Celsius)',
+          formatTemperatureCelsius(planet.pl_eqt),
         )}
       </ul>
     </aside>

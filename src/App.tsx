@@ -29,23 +29,42 @@ const selectRandomPlanets = (planets: Exoplanet[], count = 4) => {
 function App() {
   const { items, status, error } = useExoplanets()
   const [selectedPlanet, setSelectedPlanet] = useState<Exoplanet | null>(null)
-  const [hoveredPlanet, setHoveredPlanet] = useState<Exoplanet | null>(null)
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false)
 
   const featuredPlanets = useMemo(() => selectRandomPlanets(items), [items])
-  const activePlanet = selectedPlanet ?? hoveredPlanet ?? featuredPlanets[0] ?? null
 
   useEffect(() => {
     setSelectedPlanet(null)
-    setHoveredPlanet(null)
+    setIsTooltipOpen(false)
   }, [items])
+
+  useEffect(() => {
+    if (!isTooltipOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setIsTooltipOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isTooltipOpen])
+
+  const closeTooltip = () => {
+    setIsTooltipOpen(false)
+  }
 
   return (
     <main className="app-shell">
       <section className="scene-wrapper">
         <GalaxyScene
           planets={featuredPlanets}
-          onPlanetSelect={(planet) => setSelectedPlanet(planet)}
-          onPlanetHover={setHoveredPlanet}
+          onPlanetSelect={(planet) => {
+            setSelectedPlanet(planet)
+            setIsTooltipOpen(true)
+          }}
         />
         {status === 'loading' && (
           <div className="status status--floating">Summoning the cosmos...</div>
@@ -70,7 +89,11 @@ function App() {
         </p>
       </header>
 
-      <PlanetTooltip planet={activePlanet} visible={Boolean(activePlanet)} />
+      <PlanetTooltip
+        planet={selectedPlanet}
+        visible={isTooltipOpen && Boolean(selectedPlanet)}
+        onClose={closeTooltip}
+      />
 
       <footer className="overlay overlay--footer">
         <p>Drag or swipe to rotate. Click a planet to pin its details.</p>

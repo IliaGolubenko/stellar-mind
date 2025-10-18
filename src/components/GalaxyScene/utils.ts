@@ -19,46 +19,17 @@ export const getStarTexture = (() => {
   }
 })()
 
-/**
- * ВХОД: объект NASA Exoplanet (поля как в твоём SELECT)
- * ВЫХОД: только логические свойства визуализации
- *  - type: 'rocky' | 'lava' | 'ocean' | 'ice' | 'gas'
- *  - temperature: 'cold' | 'temperate' | 'hot' | 'inferno'
- *  - atmosphere: 'none' | 'thin' | 'thick'
- *  - textureKey: строковый идентификатор из мэппинга (детерминистичен по свойствам)
- */
 export function getPlanetVisual(p) {
-  // -----------------------
-  // 1) Температура планеты
-  // -----------------------
-  // приоритет: pl_eqt (K) → pl_insol (в S_earth) → оценка по звезде и орбите
   const Teq = estimateTeqK(p);
   const temperature = teqToBand(Teq);
-
-  // -----------------------
-  // 2) Класс/тип планеты
-  // -----------------------
   const type = classifyType(p, temperature);
-
-  // -----------------------
-  // 3) Толщина атмосферы (очень грубо, но правдоподобно)
-  // -----------------------
   const atmosphere = estimateAtmosphere(type, p, Teq);
-
-  // -----------------------
-  // 4) Детерминированный выбор текстуры
-  // -----------------------
-  // ВАЖНО: зависит ТОЛЬКО от бинов свойств (а не от имени).
-  // Одинаковые свойства → одинаковая textureKey.
   const stableKey = buildStableKey({ type, temperature, atmosphere, bins: binProps(p) });
   const textureKey = pickTextureDeterministically(type, temperature, stableKey);
 
   return { type, temperature, atmosphere, textureKey };
 }
 
-/* ===================== ВСПОМОГАТЕЛЬНЫЕ ===================== */
-
-/** Перевод равновесной температуры в температурную зону */
 function teqToBand(TeqK) {
   if (!isFinite(TeqK)) return 'temperate';
   if (TeqK < 200) return 'cold';
@@ -67,107 +38,93 @@ function teqToBand(TeqK) {
   return 'inferno';
 }
 
-/**
- * Оценка равновесной температуры (K).
- * Приоритеты:
- *  1) pl_eqt (K)
- *  2) pl_insol (S_earth): Teq ≈ 278 * S^(1/4)
- *  3) По звезде и большой полуоси:
- *     - если st_lum есть: S ≈ st_lum / a^2
- *     - иначе L/Lsun ≈ (st_rad)^2 * (st_teff/5772)^4, и S ≈ L / a^2
- *     затем Teq ≈ 278 * S^(1/4)
- */
 function estimateTeqK(p) {
-  if (isFinite(p.pl_eqt)) return p.pl_eqt; // K
+  if (isFinite(p.pl_eqt)) return p.pl_eqt; 
 
   if (isFinite(p.pl_insol) && p.pl_insol > 0) {
-    const S = p.pl_insol; // в долях земной инсоляции
+    const S = p.pl_insol; 
     return 278 * Math.pow(S, 0.25);
   }
 
-  const a = isFinite(p.pl_orbsmax) && p.pl_orbsmax > 0 ? p.pl_orbsmax : null; // AU
+  const a = isFinite(p.pl_orbsmax) && p.pl_orbsmax > 0 ? p.pl_orbsmax : null; 
   if (!a) return NaN;
 
-  let L; // светимость в долях L_sun
+  let L; 
   if (isFinite(p.st_lum) && p.st_lum > 0) {
     L = p.st_lum;
   } else {
-    const R = isFinite(p.st_rad) && p.st_rad > 0 ? p.st_rad : null;   // в R_sun
-    const T = isFinite(p.st_teff) && p.st_teff > 0 ? p.st_teff : null; // K
+    const R = isFinite(p.st_rad) && p.st_rad > 0 ? p.st_rad : null;   
+    const T = isFinite(p.st_teff) && p.st_teff > 0 ? p.st_teff : null; 
     if (!R || !T) return NaN;
-    // L/Lsun ≈ R^2 * (T/5772)^4
+    
     L = (R * R) * Math.pow(T / 5772, 4);
   }
 
-  const S = L / (a * a);                 // относительно Земли
-  return 278 * Math.pow(S, 0.25);        // очень грубая оценка без альбедо и парникового эффекта
+  const S = L / (a * a);
+  return 278 * Math.pow(S, 0.25);
 }
 
-/**
- * Классификация типа по радиусу/массе/плотности и температуре:
- *  r_e = pl_rade (в радиусах Земли), m_e = pl_bmasse (в массах Земли), dens = pl_dens (г/см^3)
- */
 function classifyType(p, temperature) {
   const r = isFinite(p.pl_rade) ? p.pl_rade : null;
   const m = isFinite(p.pl_bmasse) ? p.pl_bmasse : null;
   const d = isFinite(p.pl_dens) ? p.pl_dens : null;
 
-  // Явно газовый по радиусу
+  
   if (r !== null) {
-    if (r > 8) return 'gas';          // Юпитероподобные
-    if (r > 3.5) return 'ice';        // Нептуноподобные / мини-нептуны
+    if (r > 8) return 'gas';          
+    if (r > 3.5) {
+      if (temperature === 'hot' || temperature === 'inferno') {
+        return 'gas'; 
+      }
+      return 'ice';        
+    }
   }
 
-  // Если плотность высока → скорее твёрдый мир
+  
   if (d !== null) {
     if (d >= 5) {
-      // железно-каменный (суперземля)
+      
       if (temperature === 'inferno') return 'lava';
       return 'rocky';
     }
-    // низкая плотность в умеренном климате → водный мир
+    
     if (d > 1 && d < 3 && (temperature === 'temperate' || temperature === 'cold')) {
       return 'ocean';
     }
   }
 
-  // По радиусу в "малом" диапазоне
+  
   if (r !== null) {
     if (r <= 1.5) {
       return temperature === 'inferno' ? 'lava' : 'rocky';
     }
     if (r <= 3.5) {
-      // промежуточная зона: решаем по плотности/температуре
+      
       if (d !== null) {
         if (d >= 4) return temperature === 'inferno' ? 'lava' : 'rocky';
         if (d >= 1 && d < 3 && temperature !== 'inferno') return 'ocean';
       }
-      // нет плотности — эвристика по температуре
+      
       if (temperature === 'temperate' || temperature === 'cold') return 'ocean';
-      return 'ice'; // горячие мини-нептуны визуально часто "газовые/ледяные"
+      return 'ice'; 
     }
   }
 
-  // Фолбэк по массе
+  
   if (m !== null) {
     if (m > 50) return 'gas';
-    if (m > 10) return 'ice';
+    if (m > 10) {
+      return (temperature === 'hot' || temperature === 'inferno') ? 'gas' : 'ice';
+    }
     if (m <= 5) return temperature === 'inferno' ? 'lava' : 'rocky';
-    // промежуток 5–10 — решаем по температуре
+    
     return (temperature === 'temperate' || temperature === 'cold') ? 'ocean' : 'rocky';
   }
 
-  // Совсем нет данных — предполагаем каменистую
+  
   return temperature === 'inferno' ? 'lava' : 'rocky';
 }
 
-/**
- * Оценка толщины атмосферы (очень грубо):
- *  - gas/ice → thick
- *  - lava/очень горячие rocky (Teq > ~1200K) → none
- *  - лёгкие rocky (m < 0.5) → none
- *  - остальные rocky/ocean → thin (условно)
- */
 function estimateAtmosphere(type, p, Teq) {
   if (type === 'gas' || type === 'ice') return 'thick';
   if (type === 'lava') return 'none';
@@ -176,17 +133,16 @@ function estimateAtmosphere(type, p, Teq) {
   return type === 'ocean' ? 'thick' : 'thin';
 }
 
-/** Бинируем ключевые параметры, чтобы одинаковые свойства → одинаковый ключ */
 function binProps(p) {
   const bin = (x, step) => (isFinite(x) ? Math.floor(x / step) * step : 'na');
 
   return {
-    r_bin:  bin(p.pl_rade,    0.25),  // радиус с шагом 0.25 R_earth
-    m_bin:  bin(p.pl_bmasse,  1),     // масса с шагом 1 M_earth
-    d_bin:  bin(p.pl_dens,    0.5),   // плотность с шагом 0.5 g/cc
-    teq_bin:bin(estimateTeqK(p), 50), // Teq с шагом 50 K
-    a_bin:  bin(p.pl_orbsmax, 0.05),  // большая полуось с шагом 0.05 AU
-    insol_bin: bin(p.pl_insol, 0.25), // инсоляция с шагом 0.25 S_earth
+    r_bin:  bin(p.pl_rade,    0.25),  
+    m_bin:  bin(p.pl_bmasse,  1),     
+    d_bin:  bin(p.pl_dens,    0.5),   
+    teq_bin:bin(estimateTeqK(p), 50), 
+    a_bin:  bin(p.pl_orbsmax, 0.05),  
+    insol_bin: bin(p.pl_insol, 0.25), 
     star_bin: [
       bin(p.st_teff, 200),
       bin(p.st_rad,  0.1),
@@ -313,7 +269,6 @@ export const TEXTURE_POOLS = {
   },
 };
 
-
 type TextureAssetPaths = {
   color: string
   normal?: string
@@ -413,7 +368,6 @@ const PLANET_BASE_COLORS: Record<string, string> = {
 export const getPlanetBaseColor = (type: string): string =>
   PLANET_BASE_COLORS[type] ?? PLANET_BASE_COLORS.rocky
 
-/** Детерминированный выбор textureKey по пулу и стабильному ключу */
 function pickTextureDeterministically(type, temp, stableKey) {
   const poolByType = TEXTURE_POOLS[type] || TEXTURE_POOLS.rocky;
   const pool = poolByType[temp] || poolByType.temperate || Object.values(poolByType)[0];
