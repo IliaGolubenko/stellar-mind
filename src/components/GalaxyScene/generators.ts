@@ -32,7 +32,7 @@ export const generateGalaxyPositions = (radius = 95): GalaxyStarData => {
   for (let i = 0; i < NUM_STARS; i += 1) {
     const armIndex = i % NUM_GALAXY_ARMS
     const armAngle = (armIndex / NUM_GALAXY_ARMS) * Math.PI * 2
-    const distance = Math.pow(Math.random(), 1.35) * radius
+    const distance = Math.pow(Math.random(), 1.8) * radius
     const coreBias = Math.max(0, 1 - distance / (radius * 0.9))
     const armThickness = 6 + coreBias * 20
     const angleOffset = distance * 0.045 + clamp(gaussianRandom(0, 0.12), -0.4, 0.4)
