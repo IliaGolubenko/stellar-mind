@@ -23,6 +23,7 @@ export interface Exoplanet {
   sy_dist: number | null
   ra: number | null
   dec: number | null
+  earth_like_score?: number | null
 }
 
 export interface ExoplanetResponse extends Exoplanet {
