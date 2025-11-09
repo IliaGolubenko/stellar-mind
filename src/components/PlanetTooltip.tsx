@@ -201,33 +201,57 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
         role: 'user',
         content: prompt,
       }
+      const assistantMessage: ChatMessage = {
+        id: generateId(),
+        role: 'assistant',
+        content: '',
+      }
 
-      const nextMessages = [...chatMessages, userMessage]
-      setChatMessages(nextMessages)
+      const contextMessages = [...chatMessages, userMessage]
+
+      setChatMessages((prev) => [...prev, userMessage, assistantMessage])
       setIsChatLoading(true)
       setChatError(null)
 
       try {
-        const modelInput = buildModelInput(planet, nextMessages)
-        const response = await openAiClient.responses.create({
+        const modelInput = buildModelInput(planet, contextMessages)
+        const stream = await openAiClient.responses.stream({
           model: 'gpt-4o-mini',
           temperature: 0.2,
           input: modelInput,
         })
-        const assistantContent =
-          response.output_text?.trim() ??
-          'Я пока не уверен, но давай посмотрим на другие параметры.'
 
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: generateId(),
-            role: 'assistant',
-            content: assistantContent,
-          },
-        ])
+        stream.on('response.output_text.delta', (event) => {
+          const snapshot = event.snapshot ?? ''
+          setChatMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantMessage.id ? { ...message, content: snapshot } : message,
+            ),
+          )
+        })
+
+        stream.on('error', () => {
+          setChatError('Unable to reach the AI service. Check your network or API key.')
+        })
+
+        await stream.done()
+
+        setChatMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMessage.id && message.content.trim().length === 0
+              ? { ...message, content: 'Ответ не получен. Попробуйте ещё раз.' }
+              : message,
+          ),
+        )
       } catch (error) {
         setChatError('Unable to reach the AI service. Check your network or API key.')
+        setChatMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMessage.id
+              ? { ...message, content: 'Не удалось получить ответ от ИИ.' }
+              : message,
+          ),
+        )
       } finally {
         setIsChatLoading(false)
       }
