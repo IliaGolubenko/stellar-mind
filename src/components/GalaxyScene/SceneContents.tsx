@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { Suspense, useMemo } from 'react'
 import { OrbitControls } from '@react-three/drei'
 
 import { GALAXY_TILT } from './constants'
@@ -20,11 +20,13 @@ const SceneContents = ({ planets, onPlanetSelect, onPlanetHover }: GalaxyScenePr
       <group rotation={[GALAXY_TILT, 0, 0]}>
         <GalaxyArms galaxyData={galaxyData} />
         <GalaxyHazeField starPositions={galaxyData.positions} />
-        <PlanetsField
-          planets={planets}
-          onSelect={onPlanetSelect}
-          onHover={onPlanetHover ?? (() => {})}
-        />
+        <Suspense fallback={<group />}>
+          <PlanetsField
+            planets={planets}
+            onSelect={onPlanetSelect}
+            onHover={onPlanetHover ?? (() => {})}
+          />
+        </Suspense>
       </group>
       <OrbitControls
         enableZoom
