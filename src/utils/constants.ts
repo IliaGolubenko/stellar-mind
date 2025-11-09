@@ -1,5 +1,5 @@
 const NASA_TAP_QUERY =
-  'SELECT TOP 100 pl_name, hostname, discoverymethod, disc_year, pl_orbper, pl_rade, pl_bmasse, st_spectype, st_teff, st_rad, st_mass, pl_insol, pl_dens, pl_eqt, pl_orbsmax st_lum FROM ps WHERE default_flag=1 ORDER BY disc_year DESC, pl_name'
+  'SELECT TOP 100 pl_name,hostname,discoverymethod,disc_year,pl_orbper,pl_orbsmax,pl_orbeccen,pl_rade,pl_bmasse,pl_dens,pl_insol,pl_eqt,st_spectype,st_teff,st_rad,st_mass,st_lum,st_age,st_met,st_logg,st_dens,sy_dist,ra,dec FROM ps WHERE default_flag=1 ORDER BY disc_year DESC,pl_name'
 
 const TAP_PARAMS = new URLSearchParams({
   query: NASA_TAP_QUERY,

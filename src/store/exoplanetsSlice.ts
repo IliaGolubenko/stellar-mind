@@ -46,11 +46,19 @@ const transformEntry = (entry: Record<string, unknown>): Exoplanet => ({
   pl_dens: toNullableNumber(entry.pl_dens),
   pl_eqt: toNullableNumber(entry.pl_eqt),
   pl_orbsmax: toNullableNumber(entry.pl_orbsmax),
+  pl_orbeccen: toNullableNumber(entry.pl_orbeccen),
   st_spectype: toNullableString(entry.st_spectype),
   st_teff: toNullableNumber(entry.st_teff),
   st_rad: toNullableNumber(entry.st_rad),
   st_mass: toNullableNumber(entry.st_mass),
   st_lum: toNullableNumber(entry.st_lum),
+  st_age: toNullableNumber(entry.st_age),
+  st_met: toNullableNumber(entry.st_met),
+  st_logg: toNullableNumber(entry.st_logg),
+  st_dens: toNullableNumber(entry.st_dens),
+  sy_dist: toNullableNumber(entry.sy_dist),
+  ra: toNullableNumber(entry.ra),
+  dec: toNullableNumber(entry.dec),
 })
 
 export const fetchExoplanets = createAsyncThunk<Exoplanet[], void, { rejectValue: string }>(
