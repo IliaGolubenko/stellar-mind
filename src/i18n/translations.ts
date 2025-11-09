@@ -38,6 +38,7 @@ export const translations: Record<
     'advanced.table.mass': 'Mass (M⊕)',
     'advanced.table.temperature': 'Eq. temp (K)',
     'advanced.table.hostUnknown': 'Unknown star',
+    'advanced.table.habitableScore': 'Habitable score (lower = closer to Earth)',
     'footer.instructions': 'Drag or swipe to rotate. Click a planet to pin its details.',
     'tooltip.featured': 'Featured Exoplanet',
     'tooltip.closeButton': 'Close',
@@ -55,6 +56,8 @@ export const translations: Record<
     'tooltip.chatNoResponse': 'No response received. Please try again.',
     'tooltip.chatAiUnavailable': 'Unable to reach the AI service. Check your network or API key.',
     'tooltip.chatMissingKey': 'Set VITE_OPENAI_API_KEY in your environment to chat with Mission Control.',
+    'tooltip.detail.loading': 'Syncing full telemetry…',
+    'tooltip.detail.error': 'Full detail unavailable: {{error}}',
     'tooltip.dev.textureKey': 'Texture Key (dev)',
     'tooltip.dev.atmosphere': 'Atmosphere (dev)',
     'tooltip.metrics.hostStar': 'Host Star',
@@ -66,10 +69,37 @@ export const translations: Record<
     'tooltip.metrics.density': 'Planet Density (g/cm^3)',
     'tooltip.metrics.temperature': 'Equilibrium Temp (Celsius)',
     'tooltip.suggestion.aboutPlanet': 'What kind of world is this?',
+    'tooltip.prompt.aboutPlanet':
+      'Describe the planet {{planet}} in detail: classification, composition, temperature profile, orbital behavior, and notable traits.',
     'tooltip.suggestion.life': 'Could this planet host life?',
+    'tooltip.prompt.life':
+      'Evaluate whether {{planet}} could support life, referencing temperature, radiation, gravity, atmosphere, orbital eccentricity, and stellar flux.',
     'tooltip.suggestion.distance': 'How far away is this planet?',
+    'tooltip.prompt.distance':
+      'Explain how far {{planet}} is from Earth (parsecs, light years) and what that implies for missions or observation.',
     'tooltip.suggestion.atmosphere': 'What is the atmosphere like?',
+    'tooltip.prompt.atmosphere':
+      'Infer the likely atmosphere or sky appearance for {{planet}} based on mass, radius, density, equilibrium temperature, and star type.',
     'tooltip.suggestions.aria': 'Suggested questions',
+    'tooltip.missionPrompt': `You are a space-science communicator. Convert raw exoplanet parameters into a short, friendly explanation suitable for UI cards.
+Rules:
+- Reply in English with clear, non-jargon language.
+- Skip reasoning steps. Respond with the final summary only.
+- Use ONLY the provided JSON values and simple derivations (density/temperature/period insights, tidal locking hints).
+- Always include units and call out assumptions (e.g., pl_eqt usually in Kelvin).
+- If data is missing or suspicious, note that politely and avoid bold claims.
+- Do not contradict data (e.g., do not call a 1500°C world "icy").
+- Structure:
+  1) "What kind of world" — 2–3 sentences.
+  2) "Key figures" — 4–7 bullets (gravity vs Earth, period in hours, etc.).
+  3) "Comparison" — 1–2 sentences tying to Earth.
+  4) "Atmosphere and surface" — evaluate the possibility of an atmosphere and assume its composition or color (by albedo, temperature, mass, density, specflag, tranflag).
+  5) "Potential for life or colonization" — a brief assessment of whether a planet is habitable (water, temperature, radiation, gravity, atmospheric stability).
+- You may derive:
+  * g_rel ≈ (pl_bmasse / pl_rade^2)
+  * Period hours = pl_orbper * 24
+- Mention unit ambiguity if needed.
+- Format in Markdown.`,
   },
   ru: {
     'language.label': 'Язык',
@@ -105,6 +135,7 @@ export const translations: Record<
     'advanced.table.mass': 'Масса (M⊕)',
     'advanced.table.temperature': 'Темп. равн. (K)',
     'advanced.table.hostUnknown': 'Неизвестная звезда',
+    'advanced.table.habitableScore': 'Балл обитаемости (ниже = ближе к Земле)',
     'footer.instructions': 'Тяните, чтобы вращать. Кликните по планете, чтобы закрепить её.',
     'tooltip.featured': 'Избранная экзопланета',
     'tooltip.closeButton': 'Закрыть',
@@ -122,6 +153,8 @@ export const translations: Record<
     'tooltip.chatNoResponse': 'Ответ не получен. Попробуйте ещё раз.',
     'tooltip.chatAiUnavailable': 'Не удалось связаться с ИИ. Проверьте сеть или ключ API.',
     'tooltip.chatMissingKey': 'Укажите VITE_OPENAI_API_KEY, чтобы общаться с Миссией Контроля.',
+    'tooltip.detail.loading': 'Синхронизируем полный профиль…',
+    'tooltip.detail.error': 'Не удалось загрузить полный профиль: {{error}}',
     'tooltip.dev.textureKey': 'Ключ текстуры (dev)',
     'tooltip.dev.atmosphere': 'Атмосфера (dev)',
     'tooltip.metrics.hostStar': 'Звезда-хозяин',
@@ -133,10 +166,39 @@ export const translations: Record<
     'tooltip.metrics.density': 'Плотность (г/см^3)',
     'tooltip.metrics.temperature': 'Температура равн. (°C)',
     'tooltip.suggestion.aboutPlanet': 'Что это за планета?',
+    'tooltip.prompt.aboutPlanet':
+      'Опиши планету {{planet}}: тип, состав, температуру, орбиту и уникальные особенности.',
     'tooltip.suggestion.life': 'Есть ли возможность жизни на планете?',
+    'tooltip.prompt.life':
+      'Оцени, может ли {{planet}} поддерживать жизнь: температура, излучение, гравитация, атмосфера, эксцентриситет и поток звезды.',
     'tooltip.suggestion.distance': 'Насколько далеко эта планета?',
+    'tooltip.prompt.distance':
+      'Расскажи, насколько далеко находится {{planet}} (парсеки, световые годы) и что это значит для миссий или наблюдений.',
     'tooltip.suggestion.atmosphere': 'Какая атмосфера у планеты?',
+    'tooltip.prompt.atmosphere':
+      'Опиши возможную атмосферу и цвет неба {{planet}}, учитывая массу, радиус, плотность, температуру и тип звезды.',
     'tooltip.suggestions.aria': 'Примеры вопросов',
+    'tooltip.missionPrompt': `Ты — научный коммуникатор-астроном. Твоя задача — превратить сырые параметры экзопланет из JSON в короткую и понятную человеку интерпретацию для UI карточки.
+Правила:
+- Пиши по-русски, в тоне: дружелюбно и просто, без жаргона.
+- Никаких рассуждений о твоих шагах. Сразу ответ-резюме.
+- Используй ТОЛЬКО данные из входного JSON, плюс элементарные выводы (тип планеты по плотности/радиусу/температуре, приливная блокировка при сверхкоротком периоде и т. п.).
+- Указывай единицы измерения и явно помечай допущения (например, что pl_eqt, как правило, в K).
+- Если какие-то поля отсутствуют или вызывают сомнение по единицам (например, st_lum), вежливо отметь это и не делай смелых выводов на их основе.
+- Не давай противоречивых ярлыков (например, «ледяной мир» при температуре 1500°C).
+- Короткая структура ответа:
+  1) «Что это за мир» — 2–3 предложения.
+  2) «Ключевые цифры» — 4–7 маркеров с пересчётами (гравитация vs Земля, период в часах и т. п.).
+  3) «Сравнение с Землёй» — 1–2 предложения.
+  4) «Атмосфера и поверхность» — оцени возможность наличия атмосферы и предположи её состав или цвет (по albedo, температуре, массе, плотности, specflag, tranflag).
+  5) «Потенциал для жизни или колонизации» — краткая оценка, пригодна ли планета для жизни (вода, температура, радиация, гравитация, устойчивость атмосферы).
+- Можно делать простые производные:
+  * g_rel ≈ (pl_bmasse / pl_rade^2) в g_Земли, если pl_bmasse и pl_rade заданы в земных единицах.
+  * Период в часах = pl_orbper * 24.
+  * Если pl_eqt в К: t_C ≈ pl_eqt − 273.15.
+- Если есть явная неоднозначность единиц — упомяни это и дай диапазон/оговорку.
+- Форматируй в Markdown.
+`.trim(),
   },
 }
 

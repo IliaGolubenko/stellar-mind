@@ -10,6 +10,7 @@ import { getPlanetBaseColor, getPlanetVisual } from './GalaxyScene/utils'
 import PlanetMesh from './GalaxyScene/PlanetMesh'
 import { useLanguage } from '../i18n/LanguageProvider'
 import type { TranslationKey } from '../i18n/translations'
+import type { PlanetDetailRecord } from '../utils/planetDetails'
 
 type ChatRole = 'assistant' | 'user'
 
@@ -21,16 +22,24 @@ interface ChatMessage {
 
 type ModelInputMessage = ResponseInput[number]
 
-const CHAT_SUGGESTIONS: TranslationKey[] = [
-  'tooltip.suggestion.aboutPlanet',
-  'tooltip.suggestion.life',
-  'tooltip.suggestion.distance',
-  'tooltip.suggestion.atmosphere',
-] as const
+interface ChatSuggestion {
+  labelKey: TranslationKey
+  promptKey: TranslationKey
+}
+
+const CHAT_SUGGESTIONS: ChatSuggestion[] = [
+  { labelKey: 'tooltip.suggestion.aboutPlanet', promptKey: 'tooltip.prompt.aboutPlanet' },
+  { labelKey: 'tooltip.suggestion.life', promptKey: 'tooltip.prompt.life' },
+  { labelKey: 'tooltip.suggestion.distance', promptKey: 'tooltip.prompt.distance' },
+  { labelKey: 'tooltip.suggestion.atmosphere', promptKey: 'tooltip.prompt.atmosphere' },
+]
 
 interface PlanetTooltipProps {
   planet: Exoplanet | null
   visible: boolean
+  detailedPlanet: PlanetDetailRecord | null
+  detailStatus: 'idle' | 'loading' | 'succeeded' | 'failed'
+  detailError: string | null
   onClose: () => void
 }
 
@@ -67,51 +76,44 @@ const computeDerivedMetrics = (planet: Exoplanet) => ({
   equilibrium_temp_celsius: planet.pl_eqt !== null ? planet.pl_eqt - 273.15 : null,
 })
 
-const buildPlanetContextPayload = (planet: Exoplanet) =>
+const filterNullValues = (record: PlanetDetailRecord | null) => {
+  if (!record) return null
+  return Object.fromEntries(
+    Object.entries(record).filter(([, value]) => value !== null && value !== undefined && value !== ''),
+  )
+}
+
+const buildPlanetContextPayload = (
+  planet: Exoplanet,
+  detailedPlanet?: PlanetDetailRecord | null,
+) =>
   JSON.stringify(
-    {
-      planet,
-      derived: computeDerivedMetrics(planet),
-    },
+    detailedPlanet
+      ? { detailed: filterNullValues(detailedPlanet), derived: computeDerivedMetrics(planet) }
+      : { planet, derived: computeDerivedMetrics(planet) },
     null,
     2,
   )
-
-const MISSION_CONTROL_PROMPT = `
-Ты — научный коммуникатор-астроном. Твоя задача — превратить сырые параметры экзопланет из JSON в короткую и понятную человеку интерпретацию для UI карточки.
-Правила:
-- Пиши по-русски, в тоне: дружелюбно и просто, без жаргона.
-- Никаких рассуждений о твоих шагах. Сразу ответ-резюме.
-- Используй ТОЛЬКО данные из входного JSON, плюс элементарные выводы (тип планеты по плотности/радиусу/температуре, приливная блокировка при сверхкоротком периоде и т. п.).
-- Указывай единицы измерения и явно помечай допущения (например, что pl_eqt, как правило, в K).
-- Если какие-то поля отсутствуют или вызывают сомнение по единицам (например, st_lum), вежливо отметь это и не делай смелых выводов на их основе.
-- Не давай противоречивых ярлыков (например, «ледяной мир» при температуре 1500°C).
-- Короткая структура ответа:
-  1) «Что это за мир» — 2–3 предложения.
-  2) «Ключевые цифры» — 4–7 маркеров с пересчётами (гравитация vs Земля, период в часах и т. п.).
-  3) «Сравнение с Землёй» — 1–2 предложения.
-  3) «Атмосфера и поверхность» — оцени возможность наличия атмосферы и предположи её состав или цвет (по albedo, температуре, массе, плотности, specflag, tranflag).
-  4) «Потенциал для жизни или колонизации» — краткая оценка, пригодна ли планета для жизни (вода, температура, радиация, гравитация, устойчивость атмосферы).
-- Можно делать простые производные:
-  * g_rel ≈ (pl_bmasse / pl_rade^2) в g_Земли, если pl_bmasse и pl_rade заданы в земных единицах.
-  * Период в часах = pl_orbper * 24.
-  * Если pl_eqt в К: t_C ≈ pl_eqt − 273.15.
-- Если есть явная неоднозначность единиц — упомяни это и дай диапазон/оговорку.
-- Форматируй в Markdown.
-`.trim()
 
 const generateId = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2)
 
-const buildModelInput = (planet: Exoplanet, messages: ChatMessage[]): ResponseInput => {
-  const planetJson = buildPlanetContextPayload(planet)
-
+const buildModelInput = (
+  planet: Exoplanet,
+  messages: ChatMessage[],
+  detailedPlanet: PlanetDetailRecord | null,
+  missionPrompt: string,
+): ResponseInput => {
+  const planetJson = buildPlanetContextPayload(planet, detailedPlanet)
+  console.log('planet', planet)
+  console.log('detailedPlanet', detailedPlanet)
+  console.log('planetJson', planetJson)
   const baseContext: ModelInputMessage[] = [
     {
       role: 'system',
-      content: [{ type: 'input_text', text: MISSION_CONTROL_PROMPT }],
+      content: [{ type: 'input_text', text: missionPrompt }],
     },
     {
       role: 'system',
@@ -140,8 +142,16 @@ const buildModelInput = (planet: Exoplanet, messages: ChatMessage[]): ResponseIn
   return result as ResponseInput
 }
 
-const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
+const PlanetTooltip = ({
+  planet,
+  visible,
+  detailedPlanet,
+  detailStatus,
+  detailError,
+  onClose,
+}: PlanetTooltipProps) => {
   const { t } = useLanguage()
+  const missionPrompt = t('tooltip.missionPrompt')
   const visual = useMemo(() => (planet ? getPlanetVisual(planet) : null), [planet])
   const previewBaseColor = useMemo(
     () => (visual ? getPlanetBaseColor(visual.type) : '#ffffff'),
@@ -217,7 +227,7 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
       setChatErrorKey(null)
 
       try {
-        const modelInput = buildModelInput(planet, contextMessages)
+        const modelInput = buildModelInput(planet, contextMessages, detailedPlanet, missionPrompt)
         const stream = await openAiClient.responses.stream({
           model: 'gpt-4o-mini',
           temperature: 0.2,
@@ -259,7 +269,7 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
         setIsChatLoading(false)
       }
     },
-    [chatMessages, isChatLoading, openAiClient, planet, t],
+    [chatMessages, detailedPlanet, isChatLoading, missionPrompt, openAiClient, planet, t],
   )
 
   const handleChatSubmit = useCallback(
@@ -306,6 +316,17 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
           {t('tooltip.closeButton')}
         </button>
       </header>
+      {detailStatus === 'loading' && (
+        <p className="tooltip__detail-status">
+          <span className="tooltip__detail-spinner" aria-hidden="true" />
+          {t('tooltip.detail.loading')}
+        </p>
+      )}
+      {detailStatus === 'failed' && detailError && (
+        <p className="tooltip__detail-status tooltip__detail-status--error">
+          {t('tooltip.detail.error', { error: detailError })}
+        </p>
+      )}
       <div
         className="tooltip__planet-preview"
         style={{ width: '100%', height: viewMode === 'chat' ? '120px' :'480px', pointerEvents: 'none' }}
@@ -370,16 +391,20 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
       ) : (
         <div className="tooltip__chat">
           <div className="tooltip__chat-suggestions" aria-label={t('tooltip.suggestions.aria')}>
-            {CHAT_SUGGESTIONS.map((questionKey) => (
-              <button
-                type="button"
-                key={questionKey}
-                onClick={() => handleSuggestionClick(t(questionKey))}
-                disabled={isChatLoading}
-              >
-                {t(questionKey)}
-              </button>
-            ))}
+            {CHAT_SUGGESTIONS.map((suggestion) => {
+              const label = t(suggestion.labelKey)
+              const prompt = t(suggestion.promptKey, { planet: planet.pl_name })
+              return (
+                <button
+                  type="button"
+                  key={suggestion.labelKey}
+                  onClick={() => handleSuggestionClick(prompt)}
+                  disabled={isChatLoading}
+                >
+                  {label}
+                </button>
+              )
+            })}
           </div>
           <div className="tooltip__chat-log" ref={chatLogRef}>
             {chatMessages.map((message) => (

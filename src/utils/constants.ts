@@ -3,7 +3,7 @@ const TAP_BASE_URL = 'https://exoplanetarchive.ipac.caltech.edu/TAP/sync'
 const BASE_COLUMNS =
   'pl_name,hostname,discoverymethod,disc_year,pl_orbper,pl_orbsmax,pl_orbeccen,pl_rade,pl_bmasse,pl_dens,pl_insol,pl_eqt,st_spectype,st_teff,st_rad,st_mass,st_lum,st_age,st_met,st_logg,st_dens,sy_dist,ra,dec'
 
-const sanitizeTapValue = (value: string) => value.replace(/'/g, "''")
+export const sanitizeTapValue = (value: string) => value.replace(/'/g, "''")
 
 const buildPagedQuery = ({
   limit,
@@ -79,6 +79,7 @@ export const buildHabitableZoneQuery = (
     offset,
     whereClause,
     orderClause: 'ABS(pl_insol-1.0) ASC,ABS(pl_eqt-288) ASC,pl_name',
+    extraSelect: `(${earthlikeScoreExpr}) AS earth_like_score`,
   })
 }
 
@@ -89,6 +90,9 @@ export const buildPreciseSearchQuery = (planetName: string, limit = 25, offset =
     whereClause: `default_flag=1 AND UPPER(pl_name) LIKE UPPER('%${sanitizeTapValue(planetName)}%')`,
     orderClause: 'pl_name ASC',
   })
+
+export const buildPlanetDetailQuery = (planetName: string) =>
+  `SELECT TOP 1 * FROM ps WHERE default_flag=1 AND UPPER(pl_name)=UPPER('${sanitizeTapValue(planetName)}')`
 
 const TAP_PARAMS = new URLSearchParams({
   query: NASA_TAP_QUERY,

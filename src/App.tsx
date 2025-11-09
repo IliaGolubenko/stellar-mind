@@ -1,4 +1,5 @@
-import { FormEvent, UIEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, UIEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
 
 import './App.css'
 
@@ -16,6 +17,9 @@ import {
 import type { HabitableStrictness } from './utils/constants'
 import { transformExoplanetEntry } from './utils/exoplanets'
 import { useLanguage } from './i18n/LanguageProvider'
+import { fetchPlanetDetail } from './store/exoplanetsSlice'
+import type { RootState, AppDispatch } from './store'
+import { saveAdvancedRecord, clearAdvancedRecord } from './store/advancedResultsSlice'
 
 const selectRandomPlanets = (planets: Exoplanet[], count = 4) => {
   if (planets.length <= count) {
@@ -37,6 +41,7 @@ const selectRandomPlanets = (planets: Exoplanet[], count = 4) => {
 }
 
 type AdvancedTab = 'earthlike' | 'distance' | 'search'
+type LoadStatus = 'idle' | 'loading' | 'succeeded' | 'failed'
 const ADVANCED_PAGE_SIZE = 25
 
 const formatAdvancedValue = (value: number | null, digits = 1) => {
@@ -52,6 +57,33 @@ const parsecToLightYears = (value: number | null) => {
   return value * 3.26156
 }
 
+const buildAdvancedCacheKey = (
+  tab: AdvancedTab,
+  mode: HabitableStrictness | 'off',
+  searchTerm: string,
+) => {
+  if (tab === 'earthlike') {
+    return `earthlike-${mode}`
+  }
+  if (tab === 'distance') {
+    return 'distance'
+  }
+  if (tab === 'search') {
+    const term = searchTerm.trim().toLowerCase()
+    return term ? `search-${term}` : 'search-empty'
+  }
+  return tab
+}
+
+
+const DEFAULT_ADVANCED_RECORD = {
+  items: [] as Exoplanet[],
+  status: 'idle' as LoadStatus,
+  error: null as string | null,
+  offset: 0,
+  hasMore: true,
+}
+
 function App() {
   const { t, language, setLanguage } = useLanguage()
   const { items, status, error } = useExoplanets()
@@ -59,33 +91,63 @@ function App() {
   const [isTooltipOpen, setIsTooltipOpen] = useState(false)
   const [isAdvancedMode, setIsAdvancedMode] = useState(false)
   const [activeAdvancedTab, setActiveAdvancedTab] = useState<AdvancedTab>('earthlike')
-  const [advancedResults, setAdvancedResults] = useState<Exoplanet[]>([])
-  const [advancedStatus, setAdvancedStatus] = useState<'idle' | 'loading' | 'succeeded' | 'failed'>(
-    'idle',
-  )
-  const [advancedError, setAdvancedError] = useState<string | null>(null)
+  const [advancedResultsState, setAdvancedResultsState] = useState<Exoplanet[]>([])
+  const [advancedStatusState, setAdvancedStatusState] = useState<LoadStatus>('idle')
+  const [advancedErrorState, setAdvancedErrorState] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [lastSearchTerm, setLastSearchTerm] = useState('')
   const [habitableMode, setHabitableMode] = useState<HabitableStrictness | 'off'>('off')
-  const [advancedOffset, setAdvancedOffset] = useState(0)
-  const [hasMoreAdvanced, setHasMoreAdvanced] = useState(true)
-  const [isFetchingMoreAdvanced, setIsFetchingMoreAdvanced] = useState(false)
+  const dispatch = useDispatch<AppDispatch>()
+  const [advancedOffsetState, setAdvancedOffsetState] = useState(0)
+  const [hasMoreAdvancedState, setHasMoreAdvancedState] = useState(true)
+  const [isFetchingMoreAdvancedState, setIsFetchingMoreAdvancedState] = useState(false)
+  const advancedTableRef = useRef<HTMLDivElement | null>(null)
 
   const featuredPlanets = useMemo(() => selectRandomPlanets(items), [items])
+  const cacheKey = useMemo(
+    () => buildAdvancedCacheKey(activeAdvancedTab, habitableMode, lastSearchTerm),
+    [activeAdvancedTab, habitableMode, lastSearchTerm],
+  )
+
+  const detailEntry = useSelector((state: RootState) =>
+    selectedPlanet ? state.exoplanets.details[selectedPlanet.pl_name] : undefined,
+  )
+  const cachedAdvancedRecord = useSelector(
+    (state: RootState) => state.advancedResults.records[cacheKey],
+  )
+  const planetDetail = detailEntry?.data ?? null
+  const planetDetailStatus = detailEntry?.status ?? 'idle'
+  const planetDetailError = detailEntry?.error ?? null
+  const activeAdvancedRecord = cachedAdvancedRecord ?? DEFAULT_ADVANCED_RECORD
+  const advancedResults =
+    advancedResultsState.length > 0 ? advancedResultsState : activeAdvancedRecord.items
+  const advancedStatus = advancedStatusState !== 'idle' ? advancedStatusState : activeAdvancedRecord.status
+  const advancedError = advancedErrorState ?? activeAdvancedRecord.error
+  const advancedOffset =
+    advancedOffsetState !== 0 ? advancedOffsetState : activeAdvancedRecord.offset
+  const hasMoreAdvanced = hasMoreAdvancedState ?? activeAdvancedRecord.hasMore
+  const isFetchingMoreAdvanced =
+    isFetchingMoreAdvancedState || activeAdvancedRecord.status === 'loading'
 
   const handlePlanetSelect = useCallback((planet: Exoplanet) => {
-    setSelectedPlanet(planet)
+    setSelectedPlanet((previous) =>
+      previous?.pl_name === planet.pl_name ? { ...planet } : planet,
+    )
     setIsTooltipOpen(true)
   }, [])
 
   const resetAdvancedState = useCallback(() => {
-    setAdvancedResults([])
-    setAdvancedStatus('idle')
-    setAdvancedError(null)
-    setAdvancedOffset(0)
-    setHasMoreAdvanced(true)
-    setIsFetchingMoreAdvanced(false)
+    setAdvancedResultsState([])
+    setAdvancedStatusState('idle')
+    setAdvancedErrorState(null)
+    setAdvancedOffsetState(0)
+    setHasMoreAdvancedState(true)
+    setIsFetchingMoreAdvancedState(false)
   }, [])
+
+  const clearAdvancedCache = useCallback(() => {
+    dispatch(clearAdvancedRecord(cacheKey))
+  }, [cacheKey, dispatch])
 
   const getAdvancedQuery = useCallback(
     (topCount: number, offset: number) => {
@@ -109,21 +171,36 @@ function App() {
     async (offset: number, append: boolean) => {
       const topCount = offset + ADVANCED_PAGE_SIZE
       const query = getAdvancedQuery(topCount, offset)
+      const baseItems = append ? advancedResults : []
+
       if (!query) {
-        setAdvancedResults([])
-        setHasMoreAdvanced(false)
-        if (!append) {
-          setAdvancedStatus('succeeded')
-        }
+        dispatch(
+          saveAdvancedRecord({
+            key: cacheKey,
+            record: {
+              items: [],
+              status: 'succeeded',
+              error: null,
+              offset: 0,
+              hasMore: false,
+            },
+          }),
+        )
         return
       }
 
-      if (append) {
-        setIsFetchingMoreAdvanced(true)
-      } else {
-        setAdvancedStatus('loading')
-      }
-      setAdvancedError(null)
+      dispatch(
+        saveAdvancedRecord({
+          key: cacheKey,
+          record: {
+            items: baseItems,
+            status: 'loading',
+            error: null,
+            offset,
+            hasMore: true,
+          },
+        }),
+      )
 
       try {
         const response = await fetch(buildTapUrl(query))
@@ -133,22 +210,39 @@ function App() {
         const payload = (await response.json()) as Record<string, unknown>[]
         const mapped = payload.map(transformExoplanetEntry)
         const pageItems = mapped.slice(offset, offset + ADVANCED_PAGE_SIZE)
-        setAdvancedResults((prev) => (append ? [...prev, ...pageItems] : pageItems))
-        setAdvancedOffset(offset + pageItems.length)
-        setHasMoreAdvanced(pageItems.length === ADVANCED_PAGE_SIZE)
-        setAdvancedStatus('succeeded')
+        const nextResults = append ? [...baseItems, ...pageItems] : pageItems
+        const nextOffset = offset + pageItems.length
+        const nextHasMore = pageItems.length === ADVANCED_PAGE_SIZE
+
+        dispatch(
+          saveAdvancedRecord({
+            key: cacheKey,
+            record: {
+              items: nextResults,
+              status: 'succeeded',
+              error: null,
+              offset: nextOffset,
+              hasMore: nextHasMore,
+            },
+          }),
+        )
       } catch (fetchError) {
-        if (!append) {
-          setAdvancedStatus('failed')
-        }
-        setAdvancedError(fetchError instanceof Error ? fetchError.message : 'N/A')
-      } finally {
-        if (append) {
-          setIsFetchingMoreAdvanced(false)
-        }
+        const message = fetchError instanceof Error ? fetchError.message : 'N/A'
+        dispatch(
+          saveAdvancedRecord({
+            key: cacheKey,
+            record: {
+              items: baseItems,
+              status: 'failed',
+              error: message,
+              offset,
+              hasMore: true,
+            },
+          }),
+        )
       }
     },
-    [getAdvancedQuery],
+    [advancedResults, cacheKey, dispatch, getAdvancedQuery],
   )
 
   const handleAdvancedToggle = () => {
@@ -160,12 +254,14 @@ function App() {
         setLastSearchTerm('')
         setHabitableMode('off')
         resetAdvancedState()
+        advancedTableRef.current?.scrollTo({ top: 0 })
       } else {
         resetAdvancedState()
         setSearchTerm('')
         setLastSearchTerm('')
         setActiveAdvancedTab('earthlike')
         setHabitableMode('off')
+        advancedTableRef.current?.scrollTo({ top: 0 })
       }
       return next
     })
@@ -177,10 +273,13 @@ function App() {
     if (!trimmed) return
     if (activeAdvancedTab === 'search' && trimmed === lastSearchTerm) {
       resetAdvancedState()
+      dispatch(clearAdvancedRecord(cacheKey))
       await fetchAdvancedData(0, false)
       return
     }
     setActiveAdvancedTab('search')
+    const nextKey = buildAdvancedCacheKey('search', habitableMode, trimmed)
+    dispatch(clearAdvancedRecord(nextKey))
     setLastSearchTerm(trimmed)
   }
 
@@ -211,10 +310,19 @@ function App() {
     ],
   )
 
+  const showHabitableScore = activeAdvancedTab === 'earthlike'
+
   useEffect(() => {
     setSelectedPlanet(null)
     setIsTooltipOpen(false)
   }, [items])
+
+  useEffect(() => {
+    if (!selectedPlanet) return
+    if (detailEntry) return
+
+    dispatch(fetchPlanetDetail(selectedPlanet.pl_name))
+  }, [detailEntry, dispatch, selectedPlanet])
 
   useEffect(() => {
     if (!isTooltipOpen) return
@@ -231,21 +339,47 @@ function App() {
   }, [isTooltipOpen])
 
   useEffect(() => {
+    advancedTableRef.current?.scrollTo({ top: 0 })
+  }, [activeAdvancedTab, habitableMode, isAdvancedMode, lastSearchTerm])
+
+  useEffect(() => {
     if (!isAdvancedMode) {
       resetAdvancedState()
+      clearAdvancedCache()
       return
     }
 
-    if (activeAdvancedTab === 'search' && !lastSearchTerm) {
+    if (activeAdvancedTab === 'search' && !lastSearchTerm.trim()) {
       resetAdvancedState()
+      clearAdvancedCache()
       return
     }
 
-    resetAdvancedState()
-    fetchAdvancedData(0, false)
+    if (cachedAdvancedRecord) {
+      setAdvancedResultsState(cachedAdvancedRecord.items)
+      setAdvancedStatusState(cachedAdvancedRecord.status as LoadStatus)
+      setAdvancedErrorState(cachedAdvancedRecord.error)
+      setAdvancedOffsetState(cachedAdvancedRecord.offset)
+      setHasMoreAdvancedState(cachedAdvancedRecord.hasMore)
+      setIsFetchingMoreAdvancedState(false)
+      if (cachedAdvancedRecord.status === 'loading') {
+        return
+      }
+      if (
+        cachedAdvancedRecord.status === 'succeeded' ||
+        cachedAdvancedRecord.status === 'failed'
+      ) {
+        return
+      }
+    } else {
+      resetAdvancedState()
+    }
+
+    fetchAdvancedData(cachedAdvancedRecord?.offset ?? 0, Boolean(cachedAdvancedRecord))
   }, [
     activeAdvancedTab,
-    habitableMode,
+    cachedAdvancedRecord,
+    clearAdvancedCache,
     fetchAdvancedData,
     isAdvancedMode,
     lastSearchTerm,
@@ -385,11 +519,16 @@ function App() {
                 </p>
               )}
               {advancedResults.length > 0 && (
-                <div className="advanced-table-wrapper" onScroll={handleAdvancedScroll}>
+                <div
+                  className="advanced-table-wrapper"
+                  onScroll={handleAdvancedScroll}
+                  ref={advancedTableRef}
+                >
                   <table className="advanced-table">
                     <thead>
                       <tr>
                         <th>{t('advanced.table.planet')}</th>
+                        {showHabitableScore && <th>{t('advanced.table.habitableScore')}</th>}
                         <th>{t('advanced.table.distance')}</th>
                         <th>{t('advanced.table.radius')}</th>
                         <th>{t('advanced.table.mass')}</th>
@@ -408,12 +547,15 @@ function App() {
                               handlePlanetSelect(planet)
                             }
                           }}
-                        >
-                          <td>
-                            <strong>{planet.pl_name}</strong>
-                            <span>{planet.hostname ?? t('advanced.table.hostUnknown')}</span>
-                          </td>
-                          <td>{formatAdvancedValue(parsecToLightYears(planet.sy_dist), 1)}</td>
+                          >
+                            <td>
+                              <strong>{planet.pl_name}</strong>
+                              <span>{planet.hostname ?? t('advanced.table.hostUnknown')}</span>
+                            </td>
+                            {showHabitableScore && (
+                              <td>{formatAdvancedValue(planet.earth_like_score ?? null, 3)}</td>
+                            )}
+                            <td>{formatAdvancedValue(parsecToLightYears(planet.sy_dist), 1)}</td>
                           <td>{formatAdvancedValue(planet.pl_rade, 2)}</td>
                           <td>{formatAdvancedValue(planet.pl_bmasse, 2)}</td>
                           <td>{formatAdvancedValue(planet.pl_eqt, 0)}</td>
@@ -437,6 +579,9 @@ function App() {
       <PlanetTooltip
         planet={selectedPlanet}
         visible={isTooltipOpen && Boolean(selectedPlanet)}
+        detailedPlanet={planetDetail}
+        detailStatus={planetDetailStatus}
+        detailError={planetDetailError}
         onClose={closeTooltip}
       />
 
