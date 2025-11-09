@@ -8,6 +8,8 @@ import type { Exoplanet } from '../types/exoplanet'
 import { IS_DEV } from '../utils/constants'
 import { getPlanetBaseColor, getPlanetVisual } from './GalaxyScene/utils'
 import PlanetMesh from './GalaxyScene/PlanetMesh'
+import { useLanguage } from '../i18n/LanguageProvider'
+import type { TranslationKey } from '../i18n/translations'
 
 type ChatRole = 'assistant' | 'user'
 
@@ -19,11 +21,11 @@ interface ChatMessage {
 
 type ModelInputMessage = ResponseInput[number]
 
-const CHAT_SUGGESTIONS = [
-  'Что это за планета?',
-  'Есть ли жизнь на планете?',
-  'Далеко ли находится планета?',
-  'Какая атмосфера у планеты?',
+const CHAT_SUGGESTIONS: TranslationKey[] = [
+  'tooltip.suggestion.aboutPlanet',
+  'tooltip.suggestion.life',
+  'tooltip.suggestion.distance',
+  'tooltip.suggestion.atmosphere',
 ] as const
 
 interface PlanetTooltipProps {
@@ -139,6 +141,7 @@ const buildModelInput = (planet: Exoplanet, messages: ChatMessage[]): ResponseIn
 }
 
 const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
+  const { t } = useLanguage()
   const visual = useMemo(() => (planet ? getPlanetVisual(planet) : null), [planet])
   const previewBaseColor = useMemo(
     () => (visual ? getPlanetBaseColor(visual.type) : '#ffffff'),
@@ -149,7 +152,7 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [isChatLoading, setIsChatLoading] = useState(false)
-  const [chatError, setChatError] = useState<string | null>(null)
+  const [chatErrorKey, setChatErrorKey] = useState<TranslationKey | null>(null)
   const chatLogRef = useRef<HTMLDivElement | null>(null)
   const openAiApiKey = import.meta.env.VITE_OPENAI_API_KEY
   const openAiClient = useMemo(
@@ -168,15 +171,15 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
 
     setViewMode('data')
     setChatInput('')
-    setChatError(null)
+    setChatErrorKey(null)
     setChatMessages([
       {
         id: generateId(),
         role: 'assistant',
-        content: `I'm Mission Control. Ask me anything about ${planet.pl_name} or the data NASA captured.`,
+        content: t('tooltip.chatIntro', { planet: planet.pl_name }),
       },
     ])
-  }, [planet])
+  }, [planet, t])
 
   useEffect(() => {
     const chatLog = chatLogRef.current
@@ -192,7 +195,7 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
       if (!prompt) return
 
       if (!openAiClient) {
-        setChatError('Set VITE_OPENAI_API_KEY in your environment to chat with Mission Control.')
+        setChatErrorKey('tooltip.chatMissingKey')
         return
       }
 
@@ -211,7 +214,7 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
 
       setChatMessages((prev) => [...prev, userMessage, assistantMessage])
       setIsChatLoading(true)
-      setChatError(null)
+      setChatErrorKey(null)
 
       try {
         const modelInput = buildModelInput(planet, contextMessages)
@@ -231,7 +234,7 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
         })
 
         stream.on('error', () => {
-          setChatError('Unable to reach the AI service. Check your network or API key.')
+          setChatErrorKey('tooltip.chatAiUnavailable')
         })
 
         await stream.done()
@@ -239,16 +242,16 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
         setChatMessages((prev) =>
           prev.map((message) =>
             message.id === assistantMessage.id && message.content.trim().length === 0
-              ? { ...message, content: 'Ответ не получен. Попробуйте ещё раз.' }
+              ? { ...message, content: t('tooltip.chatNoResponse') }
               : message,
           ),
         )
       } catch (error) {
-        setChatError('Unable to reach the AI service. Check your network or API key.')
+        setChatErrorKey('tooltip.chatAiUnavailable')
         setChatMessages((prev) =>
           prev.map((message) =>
             message.id === assistantMessage.id
-              ? { ...message, content: 'Не удалось получить ответ от ИИ.' }
+              ? { ...message, content: t('tooltip.chatAiUnavailable') }
               : message,
           ),
         )
@@ -256,7 +259,7 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
         setIsChatLoading(false)
       }
     },
-    [chatMessages, isChatLoading, openAiClient, planet],
+    [chatMessages, isChatLoading, openAiClient, planet, t],
   )
 
   const handleChatSubmit = useCallback(
@@ -286,20 +289,21 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
   }
 
   const devMetadata = IS_DEV ? visual : null
+  const chatErrorMessage = chatErrorKey ? t(chatErrorKey) : null
   return (
     <aside className="tooltip" role="dialog" aria-modal="false">
       <header className="tooltip__header">
         <div className="tooltip__header-text">
-          <p>Featured Exoplanet</p>
+          <p>{t('tooltip.featured')}</p>
           <h2>{planet.pl_name}</h2>
         </div>
         <button
           type="button"
           className="tooltip__close"
           onClick={onClose}
-          aria-label="Close planet details"
+          aria-label={t('tooltip.closeAria')}
         >
-          Close
+          {t('tooltip.closeButton')}
         </button>
       </header>
       <div
@@ -328,52 +332,52 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
             checked={showAtmosphere}
             onChange={(event) => setShowAtmosphere(event.target.checked)}
           />
-          Show atmosphere
+          {t('tooltip.showAtmosphere')}
         </label>
         <button
           type="button"
           className="tooltip__toggle"
           onClick={() => setViewMode((current) => (current === 'data' ? 'chat' : 'data'))}
         >
-          {viewMode === 'chat' ? 'Show planet data' : 'Open AI chat'}
+          {viewMode === 'chat' ? t('tooltip.showData') : t('tooltip.openChat')}
         </button>
       </div>
       {viewMode === 'data' ? (
         <ul>
-          {devMetadata && renderMetric('Texture Key (dev)', devMetadata.textureKey)}
-          {devMetadata && renderMetric('Atmosphere (dev)', devMetadata.atmosphere)}
-          {renderMetric('Host Star', planet.hostname)}
-          {renderMetric('Discovery Method', planet.discoverymethod)}
-          {renderMetric('Discovery Year', planet.disc_year)}
+          {devMetadata && renderMetric(t('tooltip.dev.textureKey'), devMetadata.textureKey)}
+          {devMetadata && renderMetric(t('tooltip.dev.atmosphere'), devMetadata.atmosphere)}
+          {renderMetric(t('tooltip.metrics.hostStar'), planet.hostname)}
+          {renderMetric(t('tooltip.metrics.discoveryMethod'), planet.discoverymethod)}
+          {renderMetric(t('tooltip.metrics.discoveryYear'), planet.disc_year)}
           {renderMetric(
-            'Orbital Period (days)',
+            t('tooltip.metrics.orbitalPeriod'),
             planet.pl_orbper !== null ? formatNumber(planet.pl_orbper) : null,
           )}
           {renderMetric(
-            'Planet Radius (Earth = 1)',
+            t('tooltip.metrics.radius'),
             planet.pl_rade !== null ? formatNumber(planet.pl_rade) : null,
           )}
           {renderMetric(
-            'Planet Mass (Earth = 1)',
+            t('tooltip.metrics.mass'),
             planet.pl_bmasse !== null ? formatNumber(planet.pl_bmasse) : null,
           )}
           {renderMetric(
-            'Planet Density (g/cm^3)',
+            t('tooltip.metrics.density'),
             planet.pl_dens !== null ? formatNumber(planet.pl_dens) : null,
           )}
-          {renderMetric('Equilibrium Temp (Celsius)', formatTemperatureCelsius(planet.pl_eqt))}
+          {renderMetric(t('tooltip.metrics.temperature'), formatTemperatureCelsius(planet.pl_eqt))}
         </ul>
       ) : (
         <div className="tooltip__chat">
-          <div className="tooltip__chat-suggestions" aria-label="Примеры вопросов">
-            {CHAT_SUGGESTIONS.map((question) => (
+          <div className="tooltip__chat-suggestions" aria-label={t('tooltip.suggestions.aria')}>
+            {CHAT_SUGGESTIONS.map((questionKey) => (
               <button
                 type="button"
-                key={question}
-                onClick={() => handleSuggestionClick(question)}
+                key={questionKey}
+                onClick={() => handleSuggestionClick(t(questionKey))}
                 disabled={isChatLoading}
               >
-                {question}
+                {t(questionKey)}
               </button>
             ))}
           </div>
@@ -396,22 +400,23 @@ const PlanetTooltip = ({ planet, visible, onClose }: PlanetTooltipProps) => {
             ))}
             {isChatLoading && (
               <div className="tooltip__chat-message tooltip__chat-message--assistant is-loading">
-                <p>Calculating a response…</p>
+                <p>{t('tooltip.chatLoading')}</p>
               </div>
             )}
           </div>
-          {chatError && <p className="tooltip__chat-error">{chatError}</p>}
+          {chatErrorMessage && <p className="tooltip__chat-error">{chatErrorMessage}</p>}
           <form className="tooltip__chat-form" onSubmit={handleChatSubmit}>
             <input
               type="text"
               name="prompt"
-              placeholder={`Ask about ${planet.pl_name}…`}
+              autoComplete="off"
+              placeholder={t('tooltip.chatPlaceholder', { planet: planet.pl_name })}
               value={chatInput}
               onChange={(event) => setChatInput(event.target.value)}
               disabled={isChatLoading}
             />
             <button type="submit" disabled={isChatLoading || chatInput.trim().length === 0}>
-              {isChatLoading ? 'Sending…' : 'Send'}
+              {isChatLoading ? t('tooltip.chatSending') : t('tooltip.chatSend')}
             </button>
           </form>
         </div>

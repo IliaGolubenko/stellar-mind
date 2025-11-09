@@ -11,14 +11,17 @@ const buildPagedQuery = ({
   whereClause,
   orderClause,
   extraSelect,
+  columns: columnsOverride,
 }: {
   limit: number
   offset: number
   whereClause: string
   orderClause: string
   extraSelect?: string
+  columns?: string
 }) => {
-  const columns = extraSelect ? `${BASE_COLUMNS},${extraSelect}` : BASE_COLUMNS
+  const baseColumns = columnsOverride ?? BASE_COLUMNS
+  const columns = extraSelect ? `${baseColumns},${extraSelect}` : baseColumns
   const start = offset + 1
   const end = offset + limit
 
@@ -58,6 +61,26 @@ export const buildDistanceQuery = (limit = 25, offset = 0) =>
     whereClause: 'default_flag=1 AND sy_dist IS NOT NULL',
     orderClause: 'sy_dist ASC,pl_name',
   })
+
+export type HabitableStrictness = 'relaxed' | 'strict'
+
+export const buildHabitableZoneQuery = (
+  limit = 25,
+  offset = 0,
+  strictness: HabitableStrictness = 'strict',
+) => {
+  const whereClause =
+    strictness === 'strict'
+      ? 'default_flag=1 AND pl_insol BETWEEN 0.35 AND 1.5 AND pl_eqt BETWEEN 230 AND 330 AND pl_rade BETWEEN 0.5 AND 2.0 AND pl_bmasse IS NOT NULL AND pl_rade IS NOT NULL AND (pl_orbeccen IS NULL OR pl_orbeccen < 0.2) AND (pl_bmasse / POWER(pl_rade, 2)) BETWEEN 0.5 AND 2.0'
+      : 'default_flag=1 AND pl_insol BETWEEN 0.2 AND 2.5 AND pl_eqt BETWEEN 200 AND 400 AND pl_rade BETWEEN 0.4 AND 2.5 AND pl_bmasse IS NOT NULL AND pl_rade IS NOT NULL AND (pl_orbeccen IS NULL OR pl_orbeccen < 0.35) AND (pl_bmasse / POWER(pl_rade, 2)) BETWEEN 0.3 AND 2.5'
+
+  return buildPagedQuery({
+    limit,
+    offset,
+    whereClause,
+    orderClause: 'ABS(pl_insol-1.0) ASC,ABS(pl_eqt-288) ASC,pl_name',
+  })
+}
 
 export const buildPreciseSearchQuery = (planetName: string, limit = 25, offset = 0) =>
   buildPagedQuery({

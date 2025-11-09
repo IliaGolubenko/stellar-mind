@@ -9,10 +9,13 @@ import useExoplanets from './hooks/useExoplanets'
 import {
   buildDistanceQuery,
   buildEarthlikeQuery,
+  buildHabitableZoneQuery,
   buildPreciseSearchQuery,
   buildTapUrl,
 } from './utils/constants'
+import type { HabitableStrictness } from './utils/constants'
 import { transformExoplanetEntry } from './utils/exoplanets'
+import { useLanguage } from './i18n/LanguageProvider'
 
 const selectRandomPlanets = (planets: Exoplanet[], count = 4) => {
   if (planets.length <= count) {
@@ -50,6 +53,7 @@ const parsecToLightYears = (value: number | null) => {
 }
 
 function App() {
+  const { t, language, setLanguage } = useLanguage()
   const { items, status, error } = useExoplanets()
   const [selectedPlanet, setSelectedPlanet] = useState<Exoplanet | null>(null)
   const [isTooltipOpen, setIsTooltipOpen] = useState(false)
@@ -62,6 +66,7 @@ function App() {
   const [advancedError, setAdvancedError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [lastSearchTerm, setLastSearchTerm] = useState('')
+  const [habitableMode, setHabitableMode] = useState<HabitableStrictness | 'off'>('off')
   const [advancedOffset, setAdvancedOffset] = useState(0)
   const [hasMoreAdvanced, setHasMoreAdvanced] = useState(true)
   const [isFetchingMoreAdvanced, setIsFetchingMoreAdvanced] = useState(false)
@@ -83,9 +88,11 @@ function App() {
   }, [])
 
   const getAdvancedQuery = useCallback(
-    (topCount: number) => {
+    (topCount: number, offset: number) => {
       if (activeAdvancedTab === 'earthlike') {
-        return buildEarthlikeQuery(topCount)
+        return habitableMode !== 'off'
+          ? buildHabitableZoneQuery(topCount, offset, habitableMode)
+          : buildEarthlikeQuery(topCount)
       }
       if (activeAdvancedTab === 'distance') {
         return buildDistanceQuery(topCount)
@@ -95,13 +102,13 @@ function App() {
       }
       return null
     },
-    [activeAdvancedTab, lastSearchTerm],
+    [activeAdvancedTab, habitableMode, lastSearchTerm],
   )
 
   const fetchAdvancedData = useCallback(
     async (offset: number, append: boolean) => {
       const topCount = offset + ADVANCED_PAGE_SIZE
-      const query = getAdvancedQuery(topCount)
+      const query = getAdvancedQuery(topCount, offset)
       if (!query) {
         setAdvancedResults([])
         setHasMoreAdvanced(false)
@@ -134,7 +141,7 @@ function App() {
         if (!append) {
           setAdvancedStatus('failed')
         }
-        setAdvancedError(fetchError instanceof Error ? fetchError.message : 'Failed to load data')
+        setAdvancedError(fetchError instanceof Error ? fetchError.message : 'N/A')
       } finally {
         if (append) {
           setIsFetchingMoreAdvanced(false)
@@ -151,12 +158,14 @@ function App() {
         setActiveAdvancedTab('earthlike')
         setSearchTerm('')
         setLastSearchTerm('')
+        setHabitableMode('off')
         resetAdvancedState()
       } else {
         resetAdvancedState()
         setSearchTerm('')
         setLastSearchTerm('')
         setActiveAdvancedTab('earthlike')
+        setHabitableMode('off')
       }
       return next
     })
@@ -236,6 +245,7 @@ function App() {
     fetchAdvancedData(0, false)
   }, [
     activeAdvancedTab,
+    habitableMode,
     fetchAdvancedData,
     isAdvancedMode,
     lastSearchTerm,
@@ -254,16 +264,16 @@ function App() {
           onPlanetSelect={handlePlanetSelect}
         />
         {status === 'loading' && (
-          <div className="status status--floating">Summoning the cosmos...</div>
+          <div className="status status--floating">{t('status.loading')}</div>
         )}
         {status === 'failed' && (
           <div className="status status--floating status--error" role="alert">
-            Unable to reach the NASA archive: {error}
+            {t('status.error', { error: error ?? '' })}
           </div>
         )}
         {status === 'succeeded' && featuredPlanets.length === 0 && (
           <div className="status status--floating" role="status">
-            No exoplanets available right now. Try again soon.
+            {t('status.empty')}
           </div>
         )}
       </section>
@@ -271,15 +281,25 @@ function App() {
       <header className="overlay overlay--header">
         <div className="overlay__header-top">
           <div>
-            <h1>Stellar Mind Observatory</h1>
-            <p>
-              Spin the galaxy, discover planets inspired by NASA&apos;s Exoplanet Archive, and learn
-              their stories.
-            </p>
+            <h1>{t('header.title')}</h1>
+            <p>{t('header.description')}</p>
           </div>
-          <button type="button" className="advanced-toggle" onClick={handleAdvancedToggle}>
-            {isAdvancedMode ? 'Hide advanced mode' : 'Advanced mode'}
-          </button>
+          <div className="overlay__header-actions">
+            <div className="language-switcher">
+              <label htmlFor="language-select">{t('language.label')}</label>
+              <select
+                id="language-select"
+                value={language}
+                onChange={(event) => setLanguage(event.target.value as typeof language)}
+              >
+                <option value="en">{t('language.en')}</option>
+                <option value="ru">{t('language.ru')}</option>
+              </select>
+            </div>
+            <button type="button" className="advanced-toggle" onClick={handleAdvancedToggle}>
+              {isAdvancedMode ? t('advanced.toggle.hide') : t('advanced.toggle.show')}
+            </button>
+          </div>
         </div>
 
         {isAdvancedMode && (
@@ -289,10 +309,10 @@ function App() {
                 type="text"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by planet name (e.g., Kepler)"
-                aria-label="Planet name search"
+                placeholder={t('advanced.search.placeholder')}
+                aria-label={t('advanced.search.placeholder')}
               />
-              <button type="submit">Search</button>
+              <button type="submit">{t('advanced.search.button')}</button>
             </form>
 
             <div className="advanced-tabs" role="tablist">
@@ -302,7 +322,7 @@ function App() {
                 onClick={() => setActiveAdvancedTab('earthlike')}
                 role="tab"
               >
-                Earth-like prospects
+                {t('advanced.tabs.earthlike')}
               </button>
               <button
                 type="button"
@@ -310,38 +330,70 @@ function App() {
                 onClick={() => setActiveAdvancedTab('distance')}
                 role="tab"
               >
-                Closest neighbors
+                {t('advanced.tabs.distance')}
               </button>
             </div>
 
             <div className="advanced-results">
-              {advancedStatus === 'loading' && <p className="advanced-status">Fetching data…</p>}
+              {activeAdvancedTab === 'earthlike' && (
+                <div className="advanced-radio-group">
+                  <span>{t('advanced.earthlike.filterLabel')}</span>
+                  <div className="advanced-radio-options" role="radiogroup">
+                    {(['off', 'relaxed', 'strict'] as const).map((mode) => (
+                      <label key={mode}>
+                        <input
+                          type="radio"
+                          name="habitableMode"
+                          value={mode}
+                          checked={habitableMode === mode}
+                          onChange={() => setHabitableMode(mode)}
+                        />
+                        {t(
+                          mode === 'off'
+                            ? 'advanced.earthlike.mode.off'
+                            : mode === 'relaxed'
+                              ? 'advanced.earthlike.mode.relaxed'
+                              : 'advanced.earthlike.mode.strict',
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                  {habitableMode === 'strict' && (
+                    <p className="advanced-hint">{t('advanced.earthlike.strictHint')}</p>
+                  )}
+                </div>
+              )}
+              {advancedStatus === 'loading' && (
+                <p className="advanced-status">{t('advanced.status.fetching')}</p>
+              )}
               {advancedStatus === 'failed' && advancedError && (
                 <p className="advanced-status advanced-status--error">
-                  Unable to load data: {advancedError}
+                  {t('advanced.status.error', { error: advancedError })}
                 </p>
               )}
               {activeAdvancedTab === 'search' && !lastSearchTerm && advancedStatus !== 'loading' && (
-                <p className="advanced-status">Enter a planet name to search.</p>
+                <p className="advanced-status">{t('advanced.status.enterTerm')}</p>
               )}
               {advancedStatus === 'succeeded' &&
                 advancedResults.length === 0 &&
                 (activeAdvancedTab !== 'search' || lastSearchTerm) && (
-                  <p className="advanced-status">No planets matched the query.</p>
+                  <p className="advanced-status">{t('advanced.status.noResults')}</p>
                 )}
               {activeAdvancedTab === 'search' && advancedResults.length > 0 && lastSearchTerm && (
-                <p className="advanced-status">Search results for "{lastSearchTerm}".</p>
+                <p className="advanced-status">
+                  {t('advanced.status.searchResults', { term: lastSearchTerm })}
+                </p>
               )}
               {advancedResults.length > 0 && (
                 <div className="advanced-table-wrapper" onScroll={handleAdvancedScroll}>
                   <table className="advanced-table">
                     <thead>
                       <tr>
-                        <th>Planet</th>
-                        <th>Distance (ly)</th>
-                        <th>Radius (R⊕)</th>
-                        <th>Mass (M⊕)</th>
-                        <th>Eq. temp (K)</th>
+                        <th>{t('advanced.table.planet')}</th>
+                        <th>{t('advanced.table.distance')}</th>
+                        <th>{t('advanced.table.radius')}</th>
+                        <th>{t('advanced.table.mass')}</th>
+                        <th>{t('advanced.table.temperature')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -359,7 +411,7 @@ function App() {
                         >
                           <td>
                             <strong>{planet.pl_name}</strong>
-                            <span>{planet.hostname ?? 'Unknown star'}</span>
+                            <span>{planet.hostname ?? t('advanced.table.hostUnknown')}</span>
                           </td>
                           <td>{formatAdvancedValue(parsecToLightYears(planet.sy_dist), 1)}</td>
                           <td>{formatAdvancedValue(planet.pl_rade, 2)}</td>
@@ -372,10 +424,10 @@ function App() {
                 </div>
               )}
               {isFetchingMoreAdvanced && (
-                <p className="advanced-status">Loading more planets…</p>
+                <p className="advanced-status">{t('advanced.status.loadingMore')}</p>
               )}
               {!hasMoreAdvanced && advancedResults.length > 0 && (
-                <p className="advanced-status">You&apos;ve reached the end of this list.</p>
+                <p className="advanced-status">{t('advanced.status.endOfList')}</p>
               )}
             </div>
           </section>
@@ -389,7 +441,7 @@ function App() {
       />
 
       <footer className="overlay overlay--footer">
-        <p>Drag or swipe to rotate. Click a planet to pin its details.</p>
+        <p>{t('footer.instructions')}</p>
       </footer>
     </main>
   )
