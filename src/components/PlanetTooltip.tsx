@@ -79,14 +79,13 @@ const computeDerivedMetrics = (planet: Exoplanet) => ({
 const filterNullValues = (record: PlanetDetailRecord | null) => {
   if (!record) return null
   return Object.fromEntries(
-    Object.entries(record).filter(([, value]) => value !== null && value !== undefined && value !== ''),
+    Object.entries(record).filter(
+      ([, value]) => value !== null && value !== undefined && value !== '',
+    ),
   )
 }
 
-const buildPlanetContextPayload = (
-  planet: Exoplanet,
-  detailedPlanet?: PlanetDetailRecord | null,
-) =>
+const buildPlanetContextPayload = (planet: Exoplanet, detailedPlanet?: PlanetDetailRecord | null) =>
   JSON.stringify(
     detailedPlanet
       ? { detailed: filterNullValues(detailedPlanet), derived: computeDerivedMetrics(planet) }
@@ -316,20 +315,13 @@ const PlanetTooltip = ({
           {t('tooltip.closeButton')}
         </button>
       </header>
-      {detailStatus === 'loading' && (
-        <p className="tooltip__detail-status">
-          <span className="tooltip__detail-spinner" aria-hidden="true" />
-          {t('tooltip.detail.loading')}
-        </p>
-      )}
-      {detailStatus === 'failed' && detailError && (
-        <p className="tooltip__detail-status tooltip__detail-status--error">
-          {t('tooltip.detail.error', { error: detailError })}
-        </p>
-      )}
       <div
         className="tooltip__planet-preview"
-        style={{ width: '100%', height: viewMode === 'chat' ? '120px' :'480px', pointerEvents: 'none' }}
+        style={{
+          width: '100%',
+          height: viewMode === 'chat' ? '120px' : '480px',
+          pointerEvents: 'none',
+        }}
       >
         <Canvas camera={{ position: [0, 0, 2.4], fov: 60 }}>
           <ambientLight intensity={0.6} />
@@ -347,6 +339,17 @@ const PlanetTooltip = ({
         </Canvas>
       </div>
       <div className="tooltip__controls">
+        {detailStatus === 'loading' && (
+          <p className="tooltip__detail-status">
+            <span className="tooltip__detail-spinner" aria-hidden="true" />
+            {t('tooltip.detail.loading')}
+          </p>
+        )}
+        {detailStatus === 'failed' && detailError && (
+          <p className="tooltip__detail-status tooltip__detail-status--error">
+            {t('tooltip.detail.error', { error: detailError })}
+          </p>
+        )}
         <label>
           <input
             type="checkbox"
