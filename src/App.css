@@ -426,6 +426,16 @@ body {
   height: 100%;
 }
 
+.tooltip__chat-restriction {
+  margin: 0;
+  font-size: 13px;
+  color: #e0f2fe;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
 .tooltip__chat-suggestions {
   display: flex;
   flex-wrap: wrap;

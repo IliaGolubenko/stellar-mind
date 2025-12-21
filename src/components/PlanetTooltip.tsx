@@ -34,6 +34,50 @@ const CHAT_SUGGESTIONS: ChatSuggestion[] = [
   { labelKey: 'tooltip.suggestion.atmosphere', promptKey: 'tooltip.prompt.atmosphere' },
 ]
 
+const SPACE_KEYWORDS = [
+  'space',
+  'cosmos',
+  'cosmic',
+  'astronomy',
+  'astronom',
+  'astrophys',
+  'galaxy',
+  'planet',
+  'exoplanet',
+  'star',
+  'nasa',
+  'orbit',
+  'orbital',
+  'telescope',
+  'satellite',
+  'astronaut',
+  'cosmonaut',
+  'comet',
+  'meteor',
+  'nebula',
+  'constellation',
+  'lunar',
+  'mars',
+  'venus',
+  'jupiter',
+  'saturn',
+  'uranus',
+  'neptune',
+  'космос',
+  'космич',
+  'астро',
+  'галак',
+  'планет',
+  'звезд',
+  'орбит',
+  'экзопланет',
+  'спутник',
+  'космонавт',
+  'комета',
+  'метеор',
+  'туманность',
+]
+
 interface PlanetTooltipProps {
   planet: Exoplanet | null
   visible: boolean
@@ -98,6 +142,15 @@ const generateId = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2)
+
+const isSpaceRelated = (text: string, planetName: string) => {
+  const normalized = text.toLowerCase()
+  if (normalized.includes(planetName.toLowerCase())) {
+    return true
+  }
+
+  return SPACE_KEYWORDS.some((keyword) => normalized.includes(keyword))
+}
 
 const buildModelInput = (
   planet: Exoplanet,
@@ -202,6 +255,11 @@ const PlanetTooltip = ({
 
       const prompt = rawPrompt.trim()
       if (!prompt) return
+
+      if (!isSpaceRelated(prompt, planet.pl_name)) {
+        setChatErrorKey('tooltip.chatNonSpaceError')
+        return
+      }
 
       if (!openAiClient) {
         setChatErrorKey('tooltip.chatMissingKey')
@@ -393,6 +451,7 @@ const PlanetTooltip = ({
         </ul>
       ) : (
         <div className="tooltip__chat">
+          <p className="tooltip__chat-restriction">{t('tooltip.chatRestrictionNotice')}</p>
           <div className="tooltip__chat-suggestions" aria-label={t('tooltip.suggestions.aria')}>
             {CHAT_SUGGESTIONS.map((suggestion) => {
               const label = t(suggestion.labelKey)
