@@ -41,6 +41,18 @@ const SPACE_KEYWORDS = [
   'astronomy',
   'astronom',
   'astrophys',
+  'astrobiology',
+  'biosignature',
+  'bio signature',
+  'xenobiology',
+  'seti',
+  'planetary science',
+  'habitable',
+  'habitability',
+  'habitable zone',
+  'similar planet',
+  'analog planet',
+  'planet analog',
   'galaxy',
   'planet',
   'exoplanet',
@@ -57,6 +69,9 @@ const SPACE_KEYWORDS = [
   'nebula',
   'constellation',
   'lunar',
+  'life',
+  'alien',
+  'biosphere',
   'mars',
   'venus',
   'jupiter',
@@ -66,11 +81,23 @@ const SPACE_KEYWORDS = [
   'космос',
   'космич',
   'астро',
+  'астрофиз',
+  'астробио',
+  'ксенобио',
+  'планетолог',
+  'seti',
+  'сети',
+  'аналог',
+  'схож',
+  'похож',
   'галак',
   'планет',
   'звезд',
   'орбит',
   'экзопланет',
+  'обитаем',
+  'жизн',
+  'биосигнатур',
   'спутник',
   'космонавт',
   'комета',
@@ -145,11 +172,17 @@ const generateId = () =>
 
 const isSpaceRelated = (text: string, planetName: string) => {
   const normalized = text.toLowerCase()
+
   if (normalized.includes(planetName.toLowerCase())) {
     return true
   }
 
-  return SPACE_KEYWORDS.some((keyword) => normalized.includes(keyword))
+  if (!SPACE_KEYWORDS.some((keyword) => normalized.includes(keyword))) {
+    return false
+  }
+
+  // With an active planet context, treat unspecified prompts as on-topic unless explicitly off-topic.
+  return true
 }
 
 const buildModelInput = (
@@ -159,9 +192,6 @@ const buildModelInput = (
   missionPrompt: string,
 ): ResponseInput => {
   const planetJson = buildPlanetContextPayload(planet, detailedPlanet)
-  console.log('planet', planet)
-  console.log('detailedPlanet', detailedPlanet)
-  console.log('planetJson', planetJson)
   const baseContext: ModelInputMessage[] = [
     {
       role: 'system',
