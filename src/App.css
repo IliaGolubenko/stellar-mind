@@ -623,8 +623,7 @@ body {
 .status {
   position: absolute;
   right: 5%;
-  top: 10%;
-  transform: translate(-50%, -50%);
+  bottom: 15%;
   padding: 16px 24px;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.75);
@@ -648,13 +647,13 @@ body {
 
 @keyframes float {
   0% {
-    transform: translate(-50%, -50%) translateY(0);
+    transform: translateY(0);
   }
   50% {
-    transform: translate(-50%, -50%) translateY(-10px);
+    transform: translateY(-10px);
   }
   100% {
-    transform: translate(-50%, -50%) translateY(0);
+    transform: translateY(0);
   }
 }
 

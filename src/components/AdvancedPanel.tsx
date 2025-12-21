@@ -1,5 +1,5 @@
-import { FormEvent, UIEvent, useCallback, useEffect } from 'react'
-import type { MutableRefObject } from 'react'
+import { useCallback, useEffect } from 'react'
+import type { FormEvent, MutableRefObject, UIEvent } from 'react'
 
 import type { Exoplanet } from '../types/exoplanet'
 import type { HabitableStrictness } from '../utils/constants'

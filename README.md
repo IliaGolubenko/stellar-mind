@@ -1,73 +1,28 @@
-# React + TypeScript + Vite
+# Stellar Mind
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Интерактивная обсерватория экзопланет в браузере. Приложение берёт данные из NASA Exoplanet Archive, рисует 3D-галактику (React Three Fiber) и позволяет закреплять планеты, смотреть подробные метрики, искать землеподобные кандидаты и задавать вопросы ИИ-диспетчеру о выбранном мире.
 
-Currently, two official plugins are available:
+## Возможности
+- 3D-сцена с вращаемой галактикой и подсветкой случайных экзопланет.
+- Карточка планеты с радиусом, массой, температурой, орбитой и сведениями о звезде-хозяине.
+- Расширенный режим: поиск по имени, списки «похожие на Землю», «ближайшие соседи» и фильтр по зоне обитаемости.
+- Двуязычный интерфейс (RU/EN).
+- Чат с OpenAI (опционально) для кратких объяснений на основе параметров планеты.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Требования
+- Node.js 22 (в репозитории прописан Volta: `"node": "22.20.0"`).sss
+- pnpm.
 
-## React Compiler
+## Переменные окружения
+- `VITE_OPENAI_API_KEY` — если задан, в карточке планеты включается чат с ИИ.
+- `VITE_NASA_EXOPLANETS_URL` — необязательно; можно указать свой прокси к NASA TAP, иначе в dev используется встроенный прокси Vite, а в prod — публичный фолбэк.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Как запустить
+```bash
+pnpm install          # установка зависимостей
+pnpm dev              # дев-сервер на http://localhost:5173 (по умолчанию)
+pnpm build            # production-сборка в dist/
+pnpm preview          # предпросмотр собранной версии
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Если нужен чат с ИИ — экспортируйте `VITE_OPENAI_API_KEY` перед `pnpm dev` или `pnpm build`.
