@@ -625,14 +625,17 @@ body {
   right: 5%;
   bottom: 15%;
   padding: 16px 24px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.75);
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.45);
   color: #f8fafc;
   font-weight: 600;
   letter-spacing: 0.8px;
   text-transform: uppercase;
-  font-size: 13.6px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
   pointer-events: none;
 }
 
@@ -643,6 +646,27 @@ body {
 .status--error {
   background: rgba(185, 28, 28, 0.8);
   border-color: rgba(248, 113, 113, 0.6);
+  box-shadow: 0 12px 30px rgba(127, 29, 29, 0.4);
+  pointer-events: auto;
+}
+
+.status__reload {
+  border: 1px solid rgba(248, 250, 252, 0.6);
+  background: rgba(15, 23, 42, 0.9);
+  color: #fef2f2;
+  font-size: 12px;
+  text-transform: none;
+  border-radius: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.status__reload:hover,
+.status__reload:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(248, 250, 252, 0.9);
+  box-shadow: 0 0 0 2px rgba(248, 250, 252, 0.2);
 }
 
 @keyframes float {

@@ -96,7 +96,14 @@ function App() {
         )}
         {status === 'failed' && (
           <div className="status status--floating status--error" role="alert">
-            {t('status.error', { error: error ?? '' })}
+            <span>{t('status.error', { error: error ?? '' })}</span>
+            <button
+              type="button"
+              className="status__reload"
+              onClick={() => window.location.reload()}
+            >
+              {t('status.retry')}
+            </button>
           </div>
         )}
         {status === 'succeeded' && featuredPlanets.length === 0 && (

@@ -10,6 +10,7 @@ export const translations: Record<
     'language.ru': 'Русский',
     'status.loading': 'Summoning the cosmos...',
     'status.error': 'Unable to reach the NASA archive: {{error}}',
+    'status.retry': 'Reload page',
     'status.empty': 'No exoplanets available right now. Try again soon.',
     'header.title': 'Stellar Mind Observatory',
     'header.description':
@@ -107,6 +108,7 @@ Rules:
     'language.ru': 'Русский',
     'status.loading': 'Создаём карту звёзд...',
     'status.error': 'Не удалось подключиться к архиву NASA: {{error}}',
+    'status.retry': 'Перезагрузить страницу',
     'status.empty': 'Сейчас нет доступных экзопланет. Попробуйте позже.',
     'header.title': 'Обсерватория Stellar Mind',
     'header.description':
